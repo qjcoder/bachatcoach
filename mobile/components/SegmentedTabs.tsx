@@ -21,7 +21,11 @@ export function SegmentedTabs<T extends string>({ tabs, active, onChange }: Segm
             <AppText
               variant="bodySmallBold"
               color={isActive ? '#FFFFFF' : Brand.textMuted}
-              align="center">
+              align="center"
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+              style={styles.tabLabel}>
               {tab.label}
             </AppText>
           </Pressable>
@@ -42,9 +46,13 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: Radius.sm,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
+  tabLabel: { width: '100%' },
   tabActive: {
     backgroundColor: Brand.primary,
     shadowColor: Brand.primary,

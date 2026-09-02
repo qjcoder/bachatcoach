@@ -49,7 +49,7 @@ type CardHeaderProps = {
 };
 
 export function CardHeader({ icon, title, iconColor = Brand.primary }: CardHeaderProps) {
-  const { textBlock } = useDirection();
+  const { headingBlock } = useDirection();
 
   return (
     <RTLRow style={styles.cardHeader} gap={12}>
@@ -57,7 +57,7 @@ export function CardHeader({ icon, title, iconColor = Brand.primary }: CardHeade
         <Ionicons name={icon} size={18} color={iconColor} />
       </View>
       <View style={styles.cardHeaderTitle}>
-        <AppText variant="h3" style={textBlock}>{title}</AppText>
+        <AppText variant="h3" style={headingBlock}>{title}</AppText>
       </View>
     </RTLRow>
   );
@@ -74,17 +74,17 @@ export function StatCard({ label, value, accent, iconName }: StatCardProps) {
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
   const tint = accent || Brand.primary;
-  const { isRTL, textBlock, contentAlign } = useDirection();
+  const { headingBlock, alignStart, isRTL } = useDirection();
 
   return (
-    <Card variant="elevated" style={{ ...styles.statCard, ...contentAlign }}>
+    <Card variant="elevated" style={[styles.statCard, { alignItems: alignStart, direction: isRTL ? 'rtl' : 'ltr' }]}>
       {iconName ? (
-        <View style={[styles.statIconWrap, isRTL && styles.statIconRTL, { backgroundColor: `${tint}12` }]}>
+        <View style={[styles.statIconWrap, { backgroundColor: `${tint}12` }]}>
           <Ionicons name={iconName} size={20} color={tint} />
         </View>
       ) : null}
-      <View style={contentAlign}>
-        <AppText variant="overline" color={colors.muted} numberOfLines={2} style={[styles.statLabel, textBlock]}>
+      <View style={[styles.statTextCol, { alignItems: alignStart, alignSelf: 'stretch' }]}>
+        <AppText variant="overline" color={colors.muted} numberOfLines={2} style={[styles.statLabel, headingBlock]}>
           {label}
         </AppText>
         <AppText
@@ -92,7 +92,7 @@ export function StatCard({ label, value, accent, iconName }: StatCardProps) {
           color={accent || colors.text}
           numberOfLines={1}
           adjustsFontSizeToFit
-          style={textBlock}>
+          style={headingBlock}>
           {value}
         </AppText>
       </View>
@@ -176,11 +176,11 @@ export function ListCard({ icon, iconColor, iconBg, title, subtitle, meta, trail
         <Ionicons name={icon} size={22} color={iconColor} />
       </View>
       <View style={[styles.listBody, contentAlign]}>
-        <AppText variant="bodySemibold" color={colors.text} numberOfLines={1} style={textBlock}>
+        <AppText variant="bodySemibold" color={colors.text} numberOfLines={2} style={textBlock}>
           {title}
         </AppText>
         {subtitle ? (
-          <AppText variant="bodySmall" color={colors.muted} numberOfLines={1} style={[styles.listSubtitle, textBlock]}>
+          <AppText variant="bodySmall" color={colors.muted} numberOfLines={2} style={[styles.listSubtitle, textBlock, styles.phoneLtr]}>
             {subtitle}
           </AppText>
         ) : null}
@@ -218,6 +218,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderTitle: { flex: 1, minWidth: 0 },
   statCard: { flex: 1, minWidth: '45%', padding: 14, alignSelf: 'stretch' },
+  statTextCol: { width: '100%' },
   statIconWrap: {
     width: 40,
     height: 40,
@@ -225,9 +226,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
-    alignSelf: 'flex-start',
   },
-  statIconRTL: { alignSelf: 'flex-end' },
   statLabel: { marginBottom: 6 },
   hero: {
     borderRadius: Radius.xl,
@@ -297,6 +296,7 @@ const styles = StyleSheet.create({
   },
   listBody: { flex: 1, minWidth: 0, justifyContent: 'center' },
   listSubtitle: { marginTop: 3 },
+  phoneLtr: { writingDirection: 'ltr', textAlign: 'left' },
   listMeta: { marginTop: 4 },
   listTrailing: { justifyContent: 'center' },
 });

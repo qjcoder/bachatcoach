@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import api from '@/lib/api';
 import { useFormatPKR } from '@/lib/format';
-import { useAuth } from '@/context/AuthContext';
+import { useUserDisplayName } from '@/hooks/useUserDisplayName';
 import { AppText } from '@/components/AppText';
 import { DirectionScrollView } from '@/components/DirectionScrollView';
 import { RTLBlock } from '@/components/RTLRow';
@@ -25,6 +25,7 @@ import { useDirection } from '@/hooks/useDirection';
 import { Brand, Radius, Spacing } from '@/constants/theme';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
+import { normalizeLanguage } from '@/lib/language';
 
 type DashboardSummary = {
   income: number;
@@ -33,7 +34,7 @@ type DashboardSummary = {
   savingsRate: number;
   vsLastMonth: { saved: number };
   loans: { totalLent: number; totalBorrowed: number };
-  motivation: { tip: string };
+  motivation: { tip: string; source?: string };
   goals?: Array<{
     _id: string;
     title: string;
@@ -46,13 +47,13 @@ type DashboardSummary = {
 
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const displayName = useUserDisplayName();
   const formatPKR = useFormatPKR();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
-  const { textBlock, contentAlign } = useDirection();
+  const { textBlock, headingBlock } = useDirection();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -95,7 +96,7 @@ export default function HomeScreen() {
             {t('dashboard.greeting')}
           </AppText>
           <AppText variant="h1" color="#FFFFFF" style={[styles.name, textBlock]}>
-            {user?.name}
+            {displayName}
           </AppText>
         </RTLBlock>
       </LinearGradient>
@@ -124,19 +125,23 @@ export default function HomeScreen() {
         <SectionHeader title={t('dashboard.quickAdd')} />
         <RTLRow style={styles.quickRow} gap={12}>
           <Pressable
-            style={[styles.quickBtn, styles.expenseBtn, contentAlign]}
+            style={[styles.quickBtn, styles.expenseBtn]}
             onPress={() => router.push({ pathname: '/add-transaction', params: { type: 'expense' } })}>
-            <RTLRow gap={8}>
+            <RTLRow gap={8} style={styles.quickBtnInner}>
               <Ionicons name="remove-circle" size={22} color="#fff" />
-              <AppText variant="bodySmallBold" color="#FFFFFF">{t('dashboard.addExpense')}</AppText>
+              <AppText variant="bodySmallBold" color="#FFFFFF" style={styles.quickBtnLabel}>
+                {t('dashboard.addExpense')}
+              </AppText>
             </RTLRow>
           </Pressable>
           <Pressable
-            style={[styles.quickBtn, styles.incomeBtn, contentAlign]}
+            style={[styles.quickBtn, styles.incomeBtn]}
             onPress={() => router.push({ pathname: '/add-transaction', params: { type: 'income' } })}>
-            <RTLRow gap={8}>
+            <RTLRow gap={8} style={styles.quickBtnInner}>
               <Ionicons name="add-circle" size={22} color="#fff" />
-              <AppText variant="bodySmallBold" color="#FFFFFF">{t('dashboard.addIncome')}</AppText>
+              <AppText variant="bodySmallBold" color="#FFFFFF" style={styles.quickBtnLabel}>
+                {t('dashboard.addIncome')}
+              </AppText>
             </RTLRow>
           </Pressable>
         </RTLRow>
@@ -155,18 +160,32 @@ export default function HomeScreen() {
             />
             {summary.goals.slice(0, 2).map((goal) => {
               const pct = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
-              const goalTitle = i18n.language === 'ur' && goal.titleUr ? goal.titleUr : goal.title;
+              const goalTitle = normalizeLanguage(i18n.language) === 'ur' && goal.titleUr ? goal.titleUr : goal.title;
               return (
                 <Card key={goal._id} variant="elevated" style={styles.goalCard}>
                   <RTLRow style={styles.goalRow} gap={12}>
-                    <GoalIcon icon={goal.icon} size={22} />
+                    <View style={styles.goalIconSlot}>
+                      <GoalIcon icon={goal.icon} size={22} />
+                    </View>
                     <View style={styles.goalInfo}>
-                      <AppText variant="bodySemibold" color={colors.text} style={textBlock}>{goalTitle}</AppText>
-                      <AppText variant="bodySmall" color={colors.muted} style={[styles.goalAmount, textBlock]}>
+                      <AppText
+                        variant="bodySemibold"
+                        color={colors.text}
+                        numberOfLines={2}
+                        style={styles.goalTitle}>
+                        {goalTitle}
+                      </AppText>
+                      <AppText
+                        variant="bodySmall"
+                        color={colors.muted}
+                        numberOfLines={1}
+                        style={styles.goalAmount}>
                         {formatPKR(goal.currentAmount)} / {formatPKR(goal.targetAmount)}
                       </AppText>
                     </View>
-                    <AppText variant="amountMd" color={Brand.primary}>{pct}%</AppText>
+                    <AppText variant="amountMd" color={Brand.primary} align="center" shrink style={styles.goalPct}>
+                      {pct}%
+                    </AppText>
                   </RTLRow>
                   <ProgressBar progress={pct} />
                 </Card>
@@ -189,10 +208,23 @@ export default function HomeScreen() {
                 <Ionicons name="bulb" size={22} color={Brand.secondary} />
               </View>
               <View style={styles.tipBody}>
-                <AppText variant="bodySmallBold" color={colors.text} style={[styles.tipTitle, textBlock]}>
+                <AppText
+                  variant="bodySmallBold"
+                  color={colors.text}
+                  style={styles.tipTitle}>
                   {t('dashboard.motivation')}
                 </AppText>
-                <AppText variant="bodySmall" color={colors.muted} style={textBlock}>{summary.motivation.tip}</AppText>
+                <AppText variant="bodySmall" color={colors.muted} style={styles.tipQuote}>
+                  "{summary.motivation.tip}"
+                </AppText>
+                {summary.motivation.source ? (
+                  <AppText
+                    variant="caption"
+                    color={colors.muted}
+                    style={styles.tipSource}>
+                    — {summary.motivation.source}
+                  </AppText>
+                ) : null}
               </View>
             </RTLRow>
           </Card>
@@ -218,17 +250,21 @@ const styles = StyleSheet.create({
   quickRow: { marginBottom: Spacing.md },
   quickBtn: {
     flex: 1,
-    justifyContent: 'center',
     borderRadius: Radius.md,
     paddingVertical: 14,
     paddingHorizontal: 12,
   },
+  quickBtnInner: { width: '100%', justifyContent: 'flex-start' },
+  quickBtnLabel: { flex: 1 },
   expenseBtn: { backgroundColor: Brand.danger },
   incomeBtn: { backgroundColor: Brand.primary },
   goalCard: { marginBottom: 10 },
-  goalRow: { marginBottom: 10 },
-  goalInfo: { flex: 1 },
-  goalAmount: { marginTop: 3 },
+  goalRow: { marginBottom: 10, alignItems: 'center', width: '100%' },
+  goalIconSlot: { flexShrink: 0 },
+  goalInfo: { flex: 1, minWidth: 0, alignItems: 'flex-start', alignSelf: 'stretch' },
+  goalTitle: { width: '100%' },
+  goalAmount: { marginTop: 3, width: '100%' },
+  goalPct: { flexShrink: 0, minWidth: 44, textAlign: 'center' },
   addGoalBtn: {
     paddingVertical: 16,
     marginBottom: Spacing.md,
@@ -241,7 +277,7 @@ const styles = StyleSheet.create({
   addGoalInner: { justifyContent: 'center' },
   tipCard: { padding: 0 },
   tipRow: { padding: Spacing.md },
-  tipBody: { flex: 1 },
+  tipBody: { flex: 1, minWidth: 0, alignItems: 'flex-start', alignSelf: 'stretch' },
   tipIconWrap: {
     width: 44,
     height: 44,
@@ -250,5 +286,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tipTitle: { marginBottom: 4 },
+  tipTitle: { marginBottom: 4, width: '100%' },
+  tipQuote: { width: '100%' },
+  tipSource: { marginTop: 6, fontStyle: 'italic', opacity: 0.85, width: '100%' },
 });

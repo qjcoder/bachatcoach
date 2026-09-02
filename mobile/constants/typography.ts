@@ -1,7 +1,9 @@
 import { type TextStyle } from 'react-native';
+import { type AppLanguage, usesLatinFont } from '@/lib/language';
 
 export type FontWeight = 400 | 500 | 600 | 700 | 800;
-export type AppLanguage = 'en' | 'ur';
+
+export type { AppLanguage };
 
 const INTER_FONTS: Record<FontWeight, string> = {
   400: 'Inter_400Regular',
@@ -20,7 +22,7 @@ const URDU_FONTS: Record<FontWeight, string> = {
 };
 
 export function getFontFamily(lang: AppLanguage, weight: FontWeight = 400): string {
-  const map = lang === 'ur' ? URDU_FONTS : INTER_FONTS;
+  const map = usesLatinFont(lang) ? INTER_FONTS : URDU_FONTS;
   return map[weight] ?? map[400];
 }
 
@@ -59,12 +61,14 @@ export type TypeVariantName = keyof typeof Type;
 export function typeStyle(lang: AppLanguage, variant: TypeVariantName): TextStyle {
   const v = Type[variant] as TypeVariant;
   const useTransform = v.textTransform && lang !== 'ur';
+  const urduBoost = lang === 'ur' ? 2 : 0;
+  const rtl = lang === 'ur';
   return {
     fontFamily: getFontFamily(lang, v.fontWeight),
     fontSize: v.fontSize,
-    lineHeight: v.lineHeight,
-    letterSpacing: v.letterSpacing,
-    writingDirection: lang === 'ur' ? 'rtl' : 'ltr',
+    lineHeight: v.lineHeight + urduBoost,
+    letterSpacing: rtl ? 0 : v.letterSpacing,
+    writingDirection: rtl ? 'rtl' : 'ltr',
     ...(useTransform ? { textTransform: v.textTransform } : {}),
   };
 }

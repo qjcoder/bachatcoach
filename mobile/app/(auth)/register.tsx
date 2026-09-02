@@ -3,6 +3,7 @@ import { StyleSheet, Alert, Pressable, View } from 'react-native';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
+import { normalizeLanguage } from '@/lib/language';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { AuthScreen } from '@/components/AuthScreen';
@@ -13,6 +14,7 @@ export default function RegisterScreen() {
   const { t, i18n } = useTranslation();
   const { register } = useAuth();
   const [name, setName] = useState('');
+  const [nameUr, setNameUr] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,13 @@ export default function RegisterScreen() {
     }
     setLoading(true);
     try {
-      await register(name.trim(), email.trim().toLowerCase(), password, i18n.language as 'en' | 'ur');
+      await register(
+        name.trim(),
+        email.trim().toLowerCase(),
+        password,
+        normalizeLanguage(i18n.language),
+        nameUr.trim() || undefined
+      );
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -60,6 +68,13 @@ export default function RegisterScreen() {
         value={name}
         onChangeText={setName}
         autoComplete="name"
+      />
+      <TextField
+        label={t('auth.nameUr')}
+        icon="language-outline"
+        placeholder="احمد خان"
+        value={nameUr}
+        onChangeText={setNameUr}
       />
       <TextField
         label={t('auth.email')}

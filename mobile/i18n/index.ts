@@ -3,33 +3,48 @@ import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureNativeDirection } from '@/lib/rtl';
-
-import en from './en.json';
-import ur from './ur.json';
+import { type AppLanguage, normalizeLanguage } from '@/lib/language';
+import { APP_LANGUAGE_CODES } from '@/constants/languages';
+import { localeTranslations } from './locales';
 
 const LANGUAGE_KEY = 'bachatcoach_language';
 
-export const getStoredLanguage = async (): Promise<'en' | 'ur'> => {
+export const APP_LANGUAGES = APP_LANGUAGE_CODES;
+
+const resources = Object.fromEntries(
+  Object.entries(localeTranslations).map(([code, translation]) => [
+    code,
+    { translation },
+  ])
+);
+
+export const getStoredLanguage = async (): Promise<AppLanguage> => {
   const stored = await AsyncStorage.getItem(LANGUAGE_KEY);
-  if (stored === 'en' || stored === 'ur') return stored;
+  if (stored && APP_LANGUAGES.includes(stored as AppLanguage)) {
+    return stored as AppLanguage;
+  }
   const deviceLang = Localization.getLocales()[0]?.languageCode;
-  return deviceLang === 'ur' ? 'ur' : 'en';
+  if (deviceLang && APP_LANGUAGES.includes(deviceLang as AppLanguage)) {
+    return deviceLang as AppLanguage;
+  }
+  return 'en';
 };
 
-export const setStoredLanguage = async (lang: 'en' | 'ur') => {
+export const setStoredLanguage = async (lang: AppLanguage) => {
   await AsyncStorage.setItem(LANGUAGE_KEY, lang);
   configureNativeDirection(lang);
   await i18n.changeLanguage(lang);
 };
 
 i18n.use(initReactI18next).init({
-  resources: {
-    en: { translation: en },
-    ur: { translation: ur },
-  },
+  resources,
   lng: 'en',
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
 });
+
+export function currentAppLanguage(): AppLanguage {
+  return normalizeLanguage(i18n.language);
+}
 
 export default i18n;

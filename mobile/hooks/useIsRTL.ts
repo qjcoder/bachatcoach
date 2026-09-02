@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { isRTLLanguage } from '@/lib/rtl';
+import { isRTLLanguage } from '@/lib/language';
 
-/** Language-based RTL — works immediately without waiting for I18nManager reload. */
+/** Language-based RTL — only Urdu script. Roman Urdu uses LTR. */
 export function useIsRTL(): boolean {
   const { i18n } = useTranslation();
   return isRTLLanguage(i18n.language);

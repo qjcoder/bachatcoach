@@ -8,13 +8,18 @@ router.use(auth);
 
 router.get('/', async (req, res, next) => {
   try {
-    const { type, month, year, category, limit = 50 } = req.query;
+    const { type, month, year, category, from, to, limit = 50 } = req.query;
     const filter = { user: req.userId };
 
     if (type) filter.type = type;
     if (category) filter.category = category;
 
-    if (month && year) {
+    if (from && to) {
+      filter.date = {
+        $gte: new Date(from),
+        $lte: new Date(to),
+      };
+    } else if (month && year) {
       const m = Number(month) - 1;
       const y = Number(year);
       filter.date = {
@@ -35,9 +40,18 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { type, amount, category, paymentMethod, note, date } = req.body;
+    const { type, amount, category, paymentMethod, note, customCategory, date, receiptImage } = req.body;
     if (!type || amount == null) {
       return res.status(400).json({ message: 'Type and amount are required' });
+    }
+
+    const trimmedCustom = typeof customCategory === 'string' ? customCategory.trim() : '';
+    if ((category === 'other' || category === 'other_income') && !trimmedCustom) {
+      return res.status(400).json({ message: 'Custom category is required for Other' });
+    }
+
+    if (receiptImage && receiptImage.length > 6_000_000) {
+      return res.status(400).json({ message: 'Receipt image is too large' });
     }
 
     const transaction = await Transaction.create({
@@ -47,7 +61,9 @@ router.post('/', async (req, res, next) => {
       category,
       paymentMethod,
       note,
+      customCategory: trimmedCustom,
       date: date ? new Date(date) : new Date(),
+      receiptImage: receiptImage || '',
     });
 
     res.status(201).json(transaction);

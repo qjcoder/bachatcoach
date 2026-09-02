@@ -2,7 +2,6 @@ import { View, StyleSheet } from 'react-native';
 import { Brand } from '@/constants/theme';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
-import { useDirection } from '@/hooks/useDirection';
 
 type ProgressBarProps = {
   progress: number;
@@ -12,32 +11,33 @@ type ProgressBarProps = {
 
 export function ProgressBar({ progress, height = 10, color = Brand.primary }: ProgressBarProps) {
   const colors = Colors[useColorScheme() ?? 'light'];
-  const { isRTL } = useDirection();
-  const width = `${Math.min(100, Math.max(0, progress))}%`;
+  const pct = Math.min(100, Math.max(0, progress));
+  const radius = height / 2;
 
   return (
     <View
       style={[
         styles.track,
-        { height, borderRadius: height / 2, backgroundColor: colors.border },
+        {
+          height,
+          borderRadius: radius,
+          backgroundColor: colors.border,
+          flexDirection: 'row',
+        },
       ]}>
       <View
-        style={[
-          styles.fill,
-          {
-            width: width as `${number}%`,
-            height,
-            borderRadius: height / 2,
-            backgroundColor: color,
-            alignSelf: isRTL ? 'flex-end' : 'flex-start',
-          },
-        ]}
+        style={{
+          flex: pct,
+          height,
+          backgroundColor: color,
+          borderRadius: radius,
+        }}
       />
+      <View style={{ flex: 100 - pct }} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   track: { overflow: 'hidden', width: '100%' },
-  fill: {},
 });

@@ -4,11 +4,13 @@ import bcrypt from 'bcryptjs';
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
+    nameUr: { type: String, trim: true, default: '' },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, minlength: 6 },
-    language: { type: String, enum: ['en', 'ur'], default: 'en' },
+    language: { type: String, default: 'en', trim: true, maxlength: 12 },
     currency: { type: String, default: 'PKR' },
     salaryDay: { type: Number, min: 1, max: 31, default: 1 },
+    avatar: { type: String, default: '' },
   },
   { timestamps: true }
 );

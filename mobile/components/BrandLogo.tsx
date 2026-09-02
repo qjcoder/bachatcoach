@@ -1,82 +1,50 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { getFontFamily } from '@/constants/typography';
+import { Image, StyleSheet, View, type ImageStyle, type StyleProp } from 'react-native';
+
+const logoIcon = require('@/assets/images/logo-icon.png');
+const logoFull = require('@/assets/images/logo-full.png');
 
 type BrandLogoProps = {
   size?: number;
+  /** `icon` — app mark only; `full` — icon + wordmark + tagline */
+  mode?: 'icon' | 'full';
+  /** @deprecated Use `mode` instead */
   variant?: 'light' | 'dark';
+  style?: StyleProp<ImageStyle>;
 };
 
-export function BrandLogo({ size = 72, variant = 'light' }: BrandLogoProps) {
-  const isLight = variant === 'light';
+export function BrandLogo({ size = 72, mode = 'icon', style }: BrandLogoProps) {
+  if (mode === 'full') {
+    const width = size * 2.4;
+    const height = size * 1.85;
+    return (
+      <Image
+        source={logoFull}
+        style={[styles.full, { width, height }, style]}
+        resizeMode="contain"
+        accessibilityLabel="BachatCoach"
+      />
+    );
+  }
 
   return (
-    <View
-      style={[
-        styles.outer,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.28,
-        },
-        isLight ? styles.outerLight : styles.outerDark,
-      ]}>
-      <View
-        style={[
-          styles.inner,
-          {
-            width: size * 0.72,
-            height: size * 0.72,
-            borderRadius: size * 0.22,
-          },
-          isLight ? styles.innerLight : styles.innerDark,
-        ]}>
-        <Text
-          style={[
-            styles.mark,
-            {
-              fontSize: size * 0.28,
-              fontFamily: getFontFamily('en', 800),
-            },
-            isLight ? styles.markLight : styles.markDark,
-          ]}>
-          BC
-        </Text>
-      </View>
+    <View style={[styles.iconWrap, { width: size, height: size }]}>
+      <Image
+        source={logoIcon}
+        style={[styles.icon, { width: size, height: size }, style]}
+        resizeMode="contain"
+        accessibilityLabel="BachatCoach"
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-  },
-  outerLight: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  outerDark: {
-    backgroundColor: 'rgba(5,150,105,0.08)',
-    borderColor: 'rgba(5,150,105,0.2)',
-  },
-  inner: {
+  iconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  innerLight: {
-    backgroundColor: '#FFFFFF',
+  icon: {
+    borderRadius: 999,
   },
-  innerDark: {
-    backgroundColor: '#059669',
-  },
-  mark: {
-    letterSpacing: -1,
-  },
-  markLight: {
-    color: '#059669',
-  },
-  markDark: {
-    color: '#FFFFFF',
-  },
+  full: {},
 });

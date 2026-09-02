@@ -51,6 +51,7 @@ async function seed() {
 
   const user = await User.create({
     name: 'Ahmed Khan',
+    nameUr: 'احمد خان',
     email: DEMO_EMAIL,
     password: DEMO_PASSWORD,
     language: 'ur',
@@ -98,6 +99,7 @@ async function seed() {
     {
       user: user._id,
       name: 'Ali Hassan',
+      nameUr: 'علی حسن',
       phone: '03001234567',
       direction: 'i_lent',
       entries: [
@@ -108,6 +110,7 @@ async function seed() {
     {
       user: user._id,
       name: 'Sana Malik',
+      nameUr: 'ثناء ملک',
       phone: '03219876543',
       direction: 'i_lent',
       entries: [{ type: 'lent', amount: 8000, note: 'Laptop repair loan', date: daysAgo(20) }],
@@ -115,6 +118,7 @@ async function seed() {
     {
       user: user._id,
       name: 'Usman Ali',
+      nameUr: 'عثمان علی',
       phone: '03335556677',
       direction: 'i_borrowed',
       entries: [
@@ -125,6 +129,7 @@ async function seed() {
     {
       user: user._id,
       name: 'Fatima Khan',
+      nameUr: 'فاطمہ خان',
       phone: '03447778899',
       direction: 'i_borrowed',
       entries: [{ type: 'received', amount: 5000, note: 'Quick cash need', date: daysAgo(5) }],

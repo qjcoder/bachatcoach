@@ -28,7 +28,9 @@ const transactionSchema = new mongoose.Schema(
     },
     paymentMethod: { type: String, enum: PAYMENT_METHODS, default: 'cash' },
     note: { type: String, trim: true, default: '' },
+    customCategory: { type: String, trim: true, default: '' },
     date: { type: Date, required: true, default: Date.now, index: true },
+    receiptImage: { type: String, default: '' },
   },
   { timestamps: true }
 );

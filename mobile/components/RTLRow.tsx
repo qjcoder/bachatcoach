@@ -5,20 +5,21 @@ import { useIsRTL } from '@/hooks/useIsRTL';
 type RTLRowProps = ViewProps & {
   children: ReactNode;
   gap?: number;
-  /** When true (default), reverses child order in Urdu. Set false when you order children manually. */
+  /** When true, reverses child order. Default false — parent `direction: rtl` already mirrors rows. */
   mirror?: boolean;
 };
 
-/** Horizontal row that mirrors child order for Urdu (icon right, actions left, etc.). */
-export function RTLRow({ children, style, gap, mirror = true, ...props }: RTLRowProps) {
+/** Horizontal row that respects Urdu RTL via native layout direction. */
+export function RTLRow({ children, style, gap, mirror = false, ...props }: RTLRowProps) {
   const isRTL = useIsRTL();
   const items = Children.toArray(children);
   const shouldMirror = isRTL && mirror;
   const ordered = shouldMirror ? [...items].reverse() : items;
+  const direction = isRTL ? 'rtl' : 'ltr';
 
   return (
     <View
-      style={[{ flexDirection: 'row', alignItems: 'center' }, gap ? { gap } : null, style]}
+      style={[{ flexDirection: 'row', alignItems: 'center', direction }, gap ? { gap } : null, style]}
       {...props}>
       {ordered.map((child, index) => {
         if (!isValidElement(child)) return child;
@@ -31,22 +32,13 @@ export function RTLRow({ children, style, gap, mirror = true, ...props }: RTLRow
 
 /** Full-width block aligned to the reading start (right in Urdu). */
 export function RTLBlock({ children, style, ...props }: ViewProps) {
-  const isRTL = useIsRTL();
   return (
-    <View
-      style={[
-        { width: '100%' },
-        isRTL ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' },
-        style,
-      ]}
-      {...props}>
+    <View style={[{ width: '100%', alignItems: 'flex-start' }, style]} {...props}>
       {children}
     </View>
   );
 }
 
-export function rtlTextStyle(isRTL: boolean): ViewStyle {
-  return isRTL
-    ? { width: '100%', alignItems: 'flex-end' as const }
-    : { width: '100%', alignItems: 'flex-start' as const };
+export function rtlTextStyle(): ViewStyle {
+  return { width: '100%', alignItems: 'flex-start' };
 }

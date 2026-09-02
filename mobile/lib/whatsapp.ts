@@ -1,5 +1,7 @@
 import { Linking, Alert } from 'react-native';
 
+import { formatMoney } from '@/lib/format';
+
 function normalizePakPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   if (digits.startsWith('92')) return digits;
@@ -11,13 +13,14 @@ function normalizePakPhone(phone: string): string {
 export function buildLoanReminderMessage(
   name: string,
   amount: number,
-  lang: 'en' | 'ur'
+  lang: 'en' | 'ur',
+  currencyCode = 'PKR'
 ): string {
-  const formatted = amount.toLocaleString('en-PK');
+  const formatted = formatMoney(amount, currencyCode, lang);
   if (lang === 'ur') {
-    return `السلام علیکم ${name}،\n\nیہ BachatCoach سے ایک دوستانہ یاد دہانی ہے۔ براہ کرم بقایا رقم ₨ ${formatted} واپس کرنے میں مدد کریں۔\n\nشکریہ!`;
+    return `السلام علیکم ${name}،\n\nیہ BachatCoach سے ایک دوستانہ یاد دہانی ہے۔ براہ کرم بقایا رقم ${formatted} واپس کرنے میں مدد کریں۔\n\nشکریہ!`;
   }
-  return `Hi ${name},\n\nThis is a friendly reminder from BachatCoach. Please return the outstanding amount of ₨ ${formatted} when convenient.\n\nThank you!`;
+  return `Hi ${name},\n\nThis is a friendly reminder from BachatCoach. Please return the outstanding amount of ${formatted} when convenient.\n\nThank you!`;
 }
 
 export async function sendWhatsAppReminder(

@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "seed:demo": "node scripts/seed-demo.js"
+    "seed:demo": "node scripts/seed-demo.js",
+    "backfill:contact-ur": "node scripts/backfill-contact-ur.js",
+    "backfill:user-ur": "node scripts/backfill-user-ur.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

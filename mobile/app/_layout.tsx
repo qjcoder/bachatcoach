@@ -14,6 +14,8 @@ import { useAppFonts } from '@/hooks/useAppFonts';
 import { Brand } from '@/constants/theme';
 import { getFontFamily, Type } from '@/constants/typography';
 import { configureNativeDirection } from '@/lib/rtl';
+import { normalizeLanguage } from '@/lib/language';
+import { HeaderTitle, headerTitleContainerStyle } from '@/components/HeaderTitle';
 import '@/i18n';
 import { getStoredLanguage } from '@/i18n';
 
@@ -49,7 +51,7 @@ export default function RootLayout() {
 
   if (!loaded || !langReady) return null;
 
-  const lang = i18n.language === 'ur' ? 'ur' : 'en';
+  const lang = normalizeLanguage(i18n.language);
   const headerOptions = {
     headerStyle: { backgroundColor: Brand.primary },
     headerTintColor: '#FFFFFF',
@@ -58,6 +60,9 @@ export default function RootLayout() {
       fontSize: Type.h3.fontSize,
       letterSpacing: Type.h3.letterSpacing,
     },
+    headerTitle: ({ children }: { children: string }) => <HeaderTitle title={String(children)} light />,
+    headerTitleContainerStyle,
+    headerTitleAlign: 'center' as const,
     headerShadowVisible: false,
   };
 

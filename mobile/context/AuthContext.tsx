@@ -4,21 +4,35 @@ import { useRouter, useSegments } from 'expo-router';
 import api from '@/lib/api';
 
 import { setStoredLanguage } from '@/i18n';
+import { type AppLanguage } from '@/lib/language';
+import { getDefaultCurrencyForLanguage } from '@/constants/languages';
 
 type User = {
   id: string;
   name: string;
+  nameUr?: string;
   email: string;
-  language: 'en' | 'ur';
+  language: AppLanguage;
   currency: string;
   salaryDay: number;
+  avatar?: string;
 };
+
+type ProfilePatch = Partial<Pick<User, 'currency' | 'avatar' | 'name' | 'nameUr' | 'language'>>;
 
 type AuthContextType = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, language?: 'en' | 'ur') => Promise<void>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    language?: AppLanguage,
+    nameUr?: string
+  ) => Promise<void>;
+  updateProfile: (patch: ProfilePatch) => Promise<void>;
+  updateCurrency: (currency: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -38,6 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (token && userJson) {
           const userData = JSON.parse(userJson) as User;
           setUser(userData);
+          try {
+            const { data } = await api.get('/auth/me');
+            const fresh = { ...userData, ...data.user } as User;
+            await SecureStore.setItemAsync('user', JSON.stringify(fresh));
+            setUser(fresh);
+          } catch {
+            // Keep cached user if refresh fails (offline, etc.)
+          }
         }
       } finally {
         setLoading(false);
@@ -71,9 +93,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persistSession(data.token, data.user);
   };
 
-  const register = async (name: string, email: string, password: string, language: 'en' | 'ur' = 'en') => {
-    const { data } = await api.post('/auth/register', { name, email, password, language });
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    language: AppLanguage = 'en',
+    nameUr?: string
+  ) => {
+    const currency = getDefaultCurrencyForLanguage(language);
+    const { data } = await api.post('/auth/register', { name, nameUr, email, password, language, currency });
     await persistSession(data.token, data.user);
+  };
+
+  const updateProfile = async (patch: ProfilePatch) => {
+    const { data } = await api.patch('/auth/profile', patch);
+    if (!user) return;
+    const updated = { ...user, ...data.user };
+    await SecureStore.setItemAsync('user', JSON.stringify(updated));
+    setUser(updated);
+  };
+
+  const updateCurrency = async (currency: string) => {
+    await updateProfile({ currency });
   };
 
   const logout = async () => {
@@ -84,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, updateProfile, updateCurrency, logout }}>
       {children}
     </AuthContext.Provider>
   );

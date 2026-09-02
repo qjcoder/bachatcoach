@@ -13,10 +13,11 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { TextField } from '@/components/TextField';
 import { GoalIcon, GoalIconEmoji, GOAL_ICON_OPTIONS } from '@/components/GoalIcon';
 import { RTLRow } from '@/components/RTLRow';
-import { useDirection } from '@/hooks/useDirection';
+import { useIsRTL } from '@/hooks/useIsRTL';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Brand, Radius, Spacing } from '@/constants/theme';
+import { normalizeLanguage } from '@/lib/language';
 
 type Goal = {
   _id: string;
@@ -36,6 +37,8 @@ export default function GoalsScreen() {
   const formatPKR = useFormatPKR();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
+  const isRTL = useIsRTL();
+  const layoutDirection = isRTL ? 'rtl' : 'ltr';
   const [goals, setGoals] = useState<Goal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -84,12 +87,10 @@ export default function GoalsScreen() {
   };
 
   const getTitle = (goal: Goal) =>
-    i18n.language === 'ur' && goal.titleUr ? goal.titleUr : goal.title;
-
-  const { textBlock } = useDirection();
+    normalizeLanguage(i18n.language) === 'ur' && goal.titleUr ? goal.titleUr : goal.title;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, direction: layoutDirection }]}>
       <View style={styles.header}>
         <Button title={t('goals.addGoal')} onPress={() => setModalVisible(true)} style={styles.addBtn} />
       </View>
@@ -115,14 +116,20 @@ export default function GoalsScreen() {
           return (
             <Card variant="elevated" style={styles.goalCard}>
               <RTLRow style={styles.goalHeader} gap={12}>
-                <GoalIcon icon={item.icon} size={22} />
+                <View style={styles.goalIconSlot}>
+                  <GoalIcon icon={item.icon} size={22} />
+                </View>
                 <View style={styles.goalInfo}>
-                  <AppText variant="bodySemibold" color={colors.text} style={textBlock}>{getTitle(item)}</AppText>
-                  <AppText variant="bodySmall" color={colors.muted} style={styles.goalAmount}>
+                  <AppText variant="bodySemibold" color={colors.text} numberOfLines={2} style={styles.goalTitle}>
+                    {getTitle(item)}
+                  </AppText>
+                  <AppText variant="bodySmall" color={colors.muted} numberOfLines={1} style={styles.goalAmount}>
                     {formatPKR(item.currentAmount)} / {formatPKR(item.targetAmount)}
                   </AppText>
                 </View>
-                <AppText variant="amountMd" color={Brand.primary}>{pct}%</AppText>
+                <AppText variant="amountMd" color={Brand.primary} align="center" shrink style={styles.goalPct}>
+                  {pct}%
+                </AppText>
               </RTLRow>
               <ProgressBar progress={pct} height={12} />
               <Pressable onPress={() => setContributeModal(item)} style={styles.contributeBtn}>
@@ -180,9 +187,12 @@ const styles = StyleSheet.create({
   addBtn: { paddingVertical: 12 },
   list: { padding: Spacing.md, paddingTop: 0, paddingBottom: Spacing.xl },
   goalCard: { marginBottom: 12 },
-  goalHeader: { marginBottom: 12 },
-  goalInfo: { flex: 1 },
-  goalAmount: { marginTop: 3 },
+  goalHeader: { marginBottom: 12, alignItems: 'center', width: '100%' },
+  goalIconSlot: { flexShrink: 0 },
+  goalInfo: { flex: 1, minWidth: 0, alignItems: 'flex-start', alignSelf: 'stretch' },
+  goalTitle: { width: '100%' },
+  goalAmount: { marginTop: 3, width: '100%' },
+  goalPct: { flexShrink: 0, minWidth: 44, textAlign: 'center' },
   contributeBtn: {
     marginTop: 14,
     alignItems: 'center',

@@ -42,7 +42,7 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
             <View style={[styles.circle, styles.circleA]} />
             <View style={[styles.circle, styles.circleB]} />
           </View>
-          <BrandLogo size={72} variant="light" />
+          <BrandLogo size={80} />
           <AppText variant="h1" color="#FFFFFF" align="center" style={styles.title}>
             {title}
           </AppText>

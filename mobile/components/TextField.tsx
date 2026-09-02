@@ -6,7 +6,7 @@ import { useIsRTL } from '@/hooks/useIsRTL';
 import { Brand, Radius } from '@/constants/theme';
 
 type TextFieldProps = TextInputProps & {
-  label: string;
+  label?: string;
   icon?: keyof typeof Ionicons.glyphMap;
 };
 
@@ -30,7 +30,7 @@ export function TextField({ label, icon, style, ...props }: TextFieldProps) {
           style={[
             styles.input,
             type('body'),
-            { writingDirection: isRTL ? 'rtl' : 'ltr', textAlign: isRTL ? 'right' : 'left' },
+            { writingDirection: isRTL ? 'rtl' : 'ltr', textAlign: 'left' },
             icon ? (isRTL ? styles.inputWithIconRTL : styles.inputWithIconLTR) : null,
             style,
           ]}

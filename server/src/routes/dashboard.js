@@ -3,29 +3,9 @@ import Transaction from '../models/Transaction.js';
 import Contact from '../models/Contact.js';
 import Goal from '../models/Goal.js';
 import { auth } from '../middleware/auth.js';
+import { getDailyQuote } from '../data/dailyQuotes.js';
 
 const router = express.Router();
-
-const MOTIVATION_TIPS = {
-  en: [
-    'Small savings today become big dreams tomorrow.',
-    'Track every rupee — awareness is the first step to saving.',
-    'Skip one unnecessary purchase this week and move that amount to savings.',
-    'A budget is telling your money where to go, not wondering where it went.',
-    'Your future self will thank you for saving today.',
-    'Cut one subscription you rarely use — that is free money back.',
-    'Cook at home twice this week and watch your food budget shrink.',
-  ],
-  ur: [
-    'آج کی چھوٹی بچت کل کے بڑے خواب بناتی ہے۔',
-    'ہر روپیہ لکھیں — بچت کی پہلی سیڑھی شعور ہے۔',
-    'اس ہفتے ایک غیر ضروری خریداری چھوڑیں اور رقم بچت میں ڈالیں۔',
-    'بجٹ یہ بتاتا ہے پیسہ کہاں جانا ہے، نہ کہ کہاں گیا۔',
-    'آج کی بچت پر کل کا آپ شکر گزار ہوگا۔',
-    'ایک سبسکرپشن منسوخ کریں جو شاید استعمال نہ کریں۔',
-    'اس ہفتے دو بار گھر کا کھانا بنائیں، خوراک کا بجٹ کم ہوگا۔',
-  ],
-};
 
 router.use(auth);
 
@@ -108,9 +88,8 @@ router.get('/summary', async (req, res, next) => {
       { $sort: { total: -1 } },
     ]);
 
-    const lang = req.query.lang === 'ur' ? 'ur' : 'en';
-    const tips = MOTIVATION_TIPS[lang];
-    const tipOfDay = tips[new Date().getDate() % tips.length];
+    const lang = req.query.lang === 'ur' ? 'ur' : 'en'; // roman uses English quotes & tips
+    const dailyQuote = getDailyQuote(lang);
 
     const totalLent = lentContacts.reduce((sum, c) => sum + (c.balance || 0), 0);
     const totalBorrowed = borrowedContacts.reduce((sum, c) => sum + (c.balance || 0), 0);
@@ -148,10 +127,58 @@ router.get('/summary', async (req, res, next) => {
       },
       goals,
       motivation: {
-        tip: tipOfDay,
+        tip: dailyQuote.text,
+        source: dailyQuote.source,
       },
       savingsOpportunity,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/monthly-report', async (req, res, next) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+
+    const rows = await Transaction.aggregate([
+      {
+        $match: {
+          user: req.userId,
+          date: {
+            $gte: new Date(year, 0, 1),
+            $lt: new Date(year + 1, 0, 1),
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            month: { $month: '$date' },
+            type: '$type',
+          },
+          total: { $sum: '$amount' },
+        },
+      },
+    ]);
+
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const income = rows.find((r) => r._id.month === month && r._id.type === 'income')?.total || 0;
+      const expenses = rows.find((r) => r._id.month === month && r._id.type === 'expense')?.total || 0;
+      return { month, income, expenses, saved: income - expenses };
+    });
+
+    const totals = months.reduce(
+      (acc, m) => ({
+        income: acc.income + m.income,
+        expenses: acc.expenses + m.expenses,
+        saved: acc.saved + m.saved,
+      }),
+      { income: 0, expenses: 0, saved: 0 }
+    );
+
+    res.json({ year, months, totals });
   } catch (err) {
     next(err);
   }
