@@ -45,10 +45,12 @@ export default function LoansScreen() {
   const [tab, setTab] = useState<'i_lent' | 'i_borrowed'>('i_lent');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [nameUr, setNameUr] = useState('');
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
+  const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [exportingContactId, setExportingContactId] = useState<string | null>(null);
 
@@ -63,18 +65,63 @@ export default function LoansScreen() {
     }, [tab])
   );
 
-  const addContact = async () => {
-    if (!name || !amount) {
-      Alert.alert('Error', t('loans.fillRequired'));
-      return;
-    }
-    await api.post('/contacts', { name, nameUr: nameUr || undefined, phone, direction: tab, amount: Number(amount) });
-    setModalVisible(false);
+  const resetForm = () => {
+    setEditingId(null);
     setName('');
     setNameUr('');
     setPhone('');
     setAmount('');
-    await load();
+  };
+
+  const openAdd = () => {
+    resetForm();
+    setModalVisible(true);
+  };
+
+  const openEdit = (contact: Contact) => {
+    setEditingId(contact._id);
+    setName(contact.name || '');
+    setNameUr(contact.nameUr || '');
+    setPhone(contact.phone || '');
+    setAmount(String(contact.balance ?? ''));
+    setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    resetForm();
+  };
+
+  const saveContact = async () => {
+    if (!name.trim() || !amount) {
+      Alert.alert('Error', t('loans.fillRequired'));
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editingId) {
+        await api.patch(`/contacts/${editingId}`, {
+          name: name.trim(),
+          nameUr: nameUr.trim() || '',
+          phone: phone.trim(),
+          amount: Number(amount),
+        });
+      } else {
+        await api.post('/contacts', {
+          name: name.trim(),
+          nameUr: nameUr.trim() || undefined,
+          phone: phone.trim(),
+          direction: tab,
+          amount: Number(amount),
+        });
+      }
+      closeModal();
+      await load();
+    } catch {
+      Alert.alert(t('loans.title'), t('loans.updateFailed'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remindViaWhatsApp = async (contact: Contact) => {
@@ -157,7 +204,7 @@ export default function LoansScreen() {
           active={tab}
           onChange={setTab}
         />
-        <Button title={t('loans.addPerson')} onPress={() => setModalVisible(true)} style={styles.addBtn} />
+        <Button title={t('loans.addPerson')} onPress={openAdd} style={styles.addBtn} />
       </View>
 
       <FlatList
@@ -189,6 +236,12 @@ export default function LoansScreen() {
               actions={
                 <RTLRow gap={8} style={styles.actionRow}>
                   <LoanActionButton
+                    label={t('loans.edit')}
+                    icon="create-outline"
+                    tint={tint}
+                    onPress={() => openEdit(item)}
+                  />
+                  <LoanActionButton
                     label={t('loans.exportPersonPdf')}
                     icon="document-outline"
                     tint={tint}
@@ -210,14 +263,17 @@ export default function LoansScreen() {
         }}
       />
 
-      <BottomSheet visible={modalVisible} title={t('loans.addPerson')} onClose={() => setModalVisible(false)}>
+      <BottomSheet
+        visible={modalVisible}
+        title={editingId ? t('loans.editPerson') : t('loans.addPerson')}
+        onClose={closeModal}>
         <TextField label={t('loans.name')} icon="person-outline" value={name} onChangeText={setName} />
         <TextField label={t('loans.nameUr')} icon="person-outline" value={nameUr} onChangeText={setNameUr} />
         <TextField label={t('loans.phone')} icon="call-outline" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
         <TextField label={t('loans.amount')} icon="cash-outline" value={amount} onChangeText={setAmount} keyboardType="numeric" />
         <RTLRow style={styles.modalActions} gap={10}>
-          <Button title={t('common.cancel')} onPress={() => setModalVisible(false)} variant="outline" style={{ flex: 1 }} />
-          <Button title={t('common.save')} onPress={addContact} style={{ flex: 1 }} />
+          <Button title={t('common.cancel')} onPress={closeModal} variant="outline" style={{ flex: 1 }} />
+          <Button title={t('common.save')} onPress={saveContact} disabled={saving} style={{ flex: 1 }} />
         </RTLRow>
       </BottomSheet>
     </View>
@@ -229,6 +285,6 @@ const styles = StyleSheet.create({
   top: { padding: Spacing.md, paddingBottom: Spacing.sm, gap: 12 },
   list: { flex: 1, paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
   addBtn: { paddingVertical: 12 },
-  actionRow: { width: '100%' },
+  actionRow: { width: '100%', flexWrap: 'wrap' },
   modalActions: { marginTop: 8 },
 });

@@ -156,6 +156,47 @@ router.post('/:id/entry', async (req, res, next) => {
   }
 });
 
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const contact = await Contact.findOne({ _id: req.params.id, user: req.userId });
+    if (!contact) return res.status(404).json({ message: 'Contact not found' });
+
+    const { name, nameUr, phone, amount } = req.body;
+    if (typeof name === 'string' && name.trim()) contact.name = name.trim();
+    if (typeof nameUr === 'string') contact.nameUr = nameUr.trim();
+    if (typeof phone === 'string') contact.phone = phone.trim();
+
+    if (amount != null && amount !== '') {
+      const nextAmount = Number(amount);
+      if (Number.isNaN(nextAmount) || nextAmount < 0) {
+        return res.status(400).json({ message: 'Invalid amount' });
+      }
+      const current = contact.balance;
+      const diff = nextAmount - current;
+      if (diff > 0) {
+        contact.entries.push({
+          type: contact.direction === 'i_lent' ? 'lent' : 'received',
+          amount: diff,
+          note: 'Balance updated',
+        });
+      } else if (diff < 0) {
+        contact.entries.push({
+          type: contact.direction === 'i_lent' ? 'repaid' : 'paid_back',
+          amount: Math.abs(diff),
+          note: 'Balance updated',
+        });
+      }
+      if (contact.balance <= 0) contact.isSettled = true;
+      else contact.isSettled = false;
+    }
+
+    await contact.save();
+    res.json(contact);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch('/:id/settle', async (req, res, next) => {
   try {
     const contact = await Contact.findOneAndUpdate(

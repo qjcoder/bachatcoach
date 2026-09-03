@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Transaction from '../models/Transaction.js';
 import Contact from '../models/Contact.js';
 import Goal from '../models/Goal.js';
@@ -18,8 +19,14 @@ function monthRange(month, year) {
   };
 }
 
+/** Aggregate $match does not cast string JWT ids to ObjectId. */
+function userObjectId(req) {
+  return new mongoose.Types.ObjectId(req.userId);
+}
+
 router.get('/summary', async (req, res, next) => {
   try {
+    const userId = userObjectId(req);
     const now = new Date();
     const month = Number(req.query.month) || now.getMonth() + 1;
     const year = Number(req.query.year) || now.getFullYear();
@@ -33,7 +40,7 @@ router.get('/summary', async (req, res, next) => {
       Transaction.aggregate([
         {
           $match: {
-            user: req.userId,
+            user: userId,
             date: { $gte: start, $lt: end },
           },
         },
@@ -47,7 +54,7 @@ router.get('/summary', async (req, res, next) => {
       Transaction.aggregate([
         {
           $match: {
-            user: req.userId,
+            user: userId,
             date: { $gte: prevRange.start, $lt: prevRange.end },
           },
         },
@@ -74,7 +81,7 @@ router.get('/summary', async (req, res, next) => {
     const categoryBreakdown = await Transaction.aggregate([
       {
         $match: {
-          user: req.userId,
+          user: userId,
           type: 'expense',
           date: { $gte: start, $lt: end },
         },
@@ -139,12 +146,13 @@ router.get('/summary', async (req, res, next) => {
 
 router.get('/monthly-report', async (req, res, next) => {
   try {
+    const userId = userObjectId(req);
     const year = Number(req.query.year) || new Date().getFullYear();
 
     const rows = await Transaction.aggregate([
       {
         $match: {
-          user: req.userId,
+          user: userId,
           date: {
             $gte: new Date(year, 0, 1),
             $lt: new Date(year + 1, 0, 1),
