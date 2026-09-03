@@ -6,13 +6,26 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { BrandLogo } from '@/components/BrandLogo';
+import { useTheme } from '@/context/ThemeContext';
+import { setStoredLanguage } from '@/i18n';
+import { type AppLanguage, normalizeLanguage } from '@/lib/language';
+import { Brand } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
+
+const LANGS: { code: AppLanguage; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'ur', label: 'اردو' },
+  { code: 'roman', label: 'Roman' },
+];
 
 type AuthScreenProps = {
   title: string;
@@ -23,49 +36,103 @@ type AuthScreenProps = {
 
 export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProps) {
   const insets = useSafeAreaInsets();
+  const { i18n } = useTranslation();
+  const { resolved, toggle } = useTheme();
+  const isDark = resolved === 'dark';
+  const currentLang = normalizeLanguage(i18n.language);
+
+  const gradientColors = isDark
+    ? (['#020617', '#052e1f', '#064E3B', '#047857'] as const)
+    : (['#064E3B', '#065F46', '#047857', '#059669', '#10B981'] as const);
 
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <LinearGradient
-        colors={['#064E3B', '#065F46', '#047857', '#059669', '#10B981']}
-        locations={[0, 0.25, 0.5, 0.75, 1]}
+        colors={[...gradientColors]}
+        locations={isDark ? [0, 0.3, 0.65, 1] : [0, 0.25, 0.5, 0.75, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Decorative blobs */}
       <View style={[styles.blob, styles.blobTL]} />
       <View style={[styles.blob, styles.blobBR]} />
       <View style={[styles.blob, styles.blobM]} />
 
+      <Pressable
+        onPress={toggle}
+        hitSlop={10}
+        accessibilityLabel="Toggle theme"
+        style={[styles.themeBtn, { top: insets.top + 8 }]}>
+        <Ionicons
+          name={isDark ? 'sunny-outline' : 'moon-outline'}
+          size={22}
+          color="#FFFFFF"
+        />
+      </Pressable>
+
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}>
 
-        {/* Logo + heading */}
         <View style={styles.hero}>
           <View style={styles.logoRing}>
             <BrandLogo size={60} />
           </View>
-          <AppText variant="h1" color="#FFFFFF" align="center" style={styles.title}>
-            {title}
-          </AppText>
-          <AppText variant="bodySmall" color="rgba(255,255,255,0.75)" align="center" style={styles.subtitle}>
-            {subtitle}
-          </AppText>
+          <View style={styles.titleSlot}>
+            <AppText
+              variant="h1"
+              color="#FFFFFF"
+              align="center"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+              style={styles.title}>
+              {title}
+            </AppText>
+          </View>
+          <View style={styles.subtitleSlot}>
+            <AppText
+              variant="bodySmall"
+              color="rgba(255,255,255,0.75)"
+              align="center"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              style={styles.subtitle}>
+              {subtitle}
+            </AppText>
+          </View>
         </View>
 
-        {/* Glass card */}
-        <View style={styles.glass}>
+        <View style={[styles.glass, isDark && styles.glassDark]}>
           {children}
         </View>
 
         {footer ? <View style={styles.footer}>{footer}</View> : null}
+
+        <View style={styles.langTrack}>
+          {LANGS.map((lang) => {
+            const selected = currentLang === lang.code;
+            return (
+              <Pressable
+                key={lang.code}
+                onPress={() => setStoredLanguage(lang.code)}
+                style={[styles.langChip, selected && styles.langChipOn]}>
+                <AppText
+                  variant="captionBold"
+                  color={selected ? Brand.primary : 'rgba(255,255,255,0.8)'}
+                  align="center">
+                  {lang.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -75,7 +142,20 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 20 },
 
-  /* Blobs */
+  themeBtn: {
+    position: 'absolute',
+    right: 18,
+    zIndex: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   blob: {
     position: 'absolute',
     borderRadius: 999,
@@ -83,9 +163,8 @@ const styles = StyleSheet.create({
   },
   blobTL: { width: 280, height: 280, top: -100, left: -80 },
   blobBR: { width: 220, height: 220, bottom: 40, right: -60 },
-  blobM:  { width: 160, height: 160, top: '40%', left: -50, backgroundColor: 'rgba(255,255,255,0.04)' },
+  blobM: { width: 160, height: 160, top: '40%', left: -50, backgroundColor: 'rgba(255,255,255,0.04)' },
 
-  /* Hero */
   hero: { alignItems: 'center', marginBottom: 28, width: '100%' },
   logoRing: {
     width: 96,
@@ -98,10 +177,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  title: { fontWeight: '800', letterSpacing: -0.5 },
-  subtitle: { marginTop: 4, maxWidth: 260 },
+  titleSlot: {
+    width: '100%',
+    height: 34,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  title: {
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    fontSize: 24,
+    lineHeight: 32,
+    width: '100%',
+  },
+  subtitleSlot: {
+    width: '100%',
+    height: 22,
+    justifyContent: 'center',
+    marginTop: 4,
+    paddingHorizontal: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    width: '100%',
+  },
 
-  /* Glass card */
   glass: {
     width: '100%',
     maxWidth: width - 40,
@@ -117,7 +218,30 @@ const styles = StyleSheet.create({
     elevation: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.7)',
+    overflow: 'hidden',
+  },
+  glassDark: {
+    backgroundColor: 'rgba(15,23,42,0.94)',
+    borderColor: 'rgba(148,163,184,0.25)',
   },
 
   footer: { marginTop: 24, alignItems: 'center' },
+
+  langTrack: {
+    flexDirection: 'row',
+    marginTop: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 999,
+    padding: 3,
+    width: '100%',
+    maxWidth: 320,
+    // Keep English → Urdu → Roman order in both LTR and RTL
+    direction: 'ltr',
+  },
+  langChip: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  langChipOn: { backgroundColor: '#FFFFFF' },
 });

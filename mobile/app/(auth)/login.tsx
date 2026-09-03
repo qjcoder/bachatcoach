@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { StyleSheet, Alert, Pressable, View } from 'react-native';
+import { StyleSheet, Pressable, View } from 'react-native';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
+import { useDialog } from '@/context/DialogContext';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { AuthScreen } from '@/components/AuthScreen';
@@ -13,13 +14,18 @@ import { Brand } from '@/constants/theme';
 export default function LoginScreen() {
   const { t } = useTranslation();
   const { login } = useAuth();
+  const { showAlert } = useDialog();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
+      showAlert({
+        title: t('common.error'),
+        message: 'Please enter email and password',
+        tone: 'error',
+      });
       return;
     }
     setLoading(true);
@@ -29,7 +35,7 @@ export default function LoginScreen() {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         (err instanceof Error ? err.message : 'Login failed');
-      Alert.alert('Error', message);
+      showAlert({ title: t('common.error'), message, tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -51,6 +57,14 @@ export default function LoginScreen() {
       }>
 
       <GoogleSignInButton />
+
+      <Link href="/(auth)/otp?purpose=login" asChild>
+        <Pressable style={styles.otpLink}>
+          <AppText variant="bodySemibold" color={Brand.primary} style={styles.otpLinkText}>
+            {t('auth.signInWithEmailCode')}
+          </AppText>
+        </Pressable>
+      </Link>
 
       <TextField
         label={t('auth.email')}
@@ -82,6 +96,14 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  otpLink: {
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  otpLinkText: {
+    textDecorationLine: 'underline',
+  },
   button: {
     marginTop: 6,
     marginBottom: 8,
@@ -97,6 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'wrap',
     alignItems: 'center',
+    paddingHorizontal: 12,
   },
   footerLink: {
     textDecorationLine: 'underline',

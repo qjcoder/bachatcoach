@@ -42,7 +42,7 @@ userSchema.methods.comparePassword = function comparePassword(candidate) {
   return bcrypt.compare(candidate, this.password);
 };
 
-/** Random password for Google-only accounts (never used for login). */
+/** Random password for Google/OTP-only accounts (never used for login). */
 export function randomUnusedPassword() {
   return crypto.randomBytes(32).toString('hex');
 }

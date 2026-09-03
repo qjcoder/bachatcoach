@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
@@ -10,6 +10,7 @@ import {
   type LoanContactReportDetail,
 } from '@/lib/loansReportPdf';
 import { useAuth } from '@/context/AuthContext';
+import { useDialog } from '@/context/DialogContext';
 import { useUserDisplayName } from '@/hooks/useUserDisplayName';
 import { Button } from '@/components/Button';
 import { LoanContactCard, LoanActionButton } from '@/components/LoanContactCard';
@@ -37,6 +38,7 @@ type Contact = {
 export default function LoansScreen() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const { showAlert } = useDialog();
   const displayName = useUserDisplayName('User');
   const formatPKR = useFormatPKR();
   const scheme = useColorScheme() ?? 'light';
@@ -97,7 +99,7 @@ export default function LoansScreen() {
 
   const saveContact = async () => {
     if (!name.trim() || !amount) {
-      Alert.alert('Error', t('loans.fillRequired'));
+      showAlert({ title: t('common.error'), message: t('loans.fillRequired'), tone: 'error' });
       return;
     }
     setSaving(true);
@@ -121,7 +123,7 @@ export default function LoansScreen() {
       closeModal();
       await load();
     } catch {
-      Alert.alert(t('loans.title'), t('loans.updateFailed'));
+      showAlert({ title: t('loans.title'), message: t('loans.updateFailed'), tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -129,7 +131,7 @@ export default function LoansScreen() {
 
   const remindViaWhatsApp = async (contact: Contact) => {
     if (!contact.phone) {
-      Alert.alert(t('loans.noPhone'), t('loans.addPhoneFirst'));
+      showAlert({ title: t('loans.noPhone'), message: t('loans.addPhoneFirst'), tone: 'info' });
       return;
     }
     const message = buildLoanReminderMessage(
@@ -141,7 +143,7 @@ export default function LoansScreen() {
     try {
       await sendWhatsAppReminder(contact.phone, message);
     } catch {
-      Alert.alert('Error', t('loans.whatsappError'));
+      showAlert({ title: t('common.error'), message: t('loans.whatsappError'), tone: 'error' });
     }
   };
 
@@ -190,7 +192,7 @@ export default function LoansScreen() {
         sectionTitle
       );
     } catch {
-      Alert.alert(t('loans.title'), t('loans.exportFailed'));
+      showAlert({ title: t('loans.title'), message: t('loans.exportFailed'), tone: 'error' });
     } finally {
       setExportingContactId(null);
     }

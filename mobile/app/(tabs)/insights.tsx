@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, StyleSheet, RefreshControl, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { DirectionScrollView } from '@/components/DirectionScrollView';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { useFormatPKR } from '@/lib/format';
 import { exportMonthlyReportPdf, type MonthlyReportData } from '@/lib/monthlyReportPdf';
 import { useAuth } from '@/context/AuthContext';
+import { useDialog } from '@/context/DialogContext';
 import { useUserDisplayName } from '@/hooks/useUserDisplayName';
 import { AppText } from '@/components/AppText';
 import { Card, CardHeader } from '@/components/Card';
@@ -32,6 +33,7 @@ type InsightsData = {
 export default function InsightsScreen() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const { showAlert } = useDialog();
   const displayName = useUserDisplayName('User');
   const formatPKR = useFormatPKR();
   const scheme = useColorScheme() ?? 'light';
@@ -94,7 +96,11 @@ export default function InsightsScreen() {
         currency: user?.currency || 'PKR',
       });
     } catch {
-      Alert.alert(t('insights.monthlyReport'), t('insights.exportFailed'));
+      showAlert({
+        title: t('insights.monthlyReport'),
+        message: t('insights.exportFailed'),
+        tone: 'error',
+      });
     } finally {
       setExporting(false);
     }

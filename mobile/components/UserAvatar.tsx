@@ -9,10 +9,11 @@ type UserAvatarProps = {
   size?: number;
   editable?: boolean;
   onPress?: () => void;
+  circular?: boolean;
 };
 
-export function UserAvatar({ name, avatar, size = 56, editable, onPress }: UserAvatarProps) {
-  const radius = size * 0.36;
+export function UserAvatar({ name, avatar, size = 56, editable, onPress, circular }: UserAvatarProps) {
+  const radius = circular ? size / 2 : size * 0.36;
   const initial = name?.charAt(0).toUpperCase() || '?';
   const fontSize = size * 0.38;
 

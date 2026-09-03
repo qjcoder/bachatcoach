@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { StyleSheet, Alert, Pressable, View } from 'react-native';
+import { StyleSheet, Pressable, View } from 'react-native';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
+import { useDialog } from '@/context/DialogContext';
 import { normalizeLanguage } from '@/lib/language';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -14,6 +15,7 @@ import { Brand } from '@/constants/theme';
 export default function RegisterScreen() {
   const { t, i18n } = useTranslation();
   const { register } = useAuth();
+  const { showAlert } = useDialog();
   const [name, setName] = useState('');
   const [nameUr, setNameUr] = useState('');
   const [email, setEmail] = useState('');
@@ -22,11 +24,19 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Error', 'Please fill all required fields');
+      showAlert({
+        title: t('common.error'),
+        message: 'Please fill all required fields',
+        tone: 'error',
+      });
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showAlert({
+        title: t('common.error'),
+        message: 'Password must be at least 6 characters',
+        tone: 'error',
+      });
       return;
     }
     setLoading(true);
@@ -42,7 +52,7 @@ export default function RegisterScreen() {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         'Registration failed';
-      Alert.alert('Error', message);
+      showAlert({ title: t('common.error'), message, tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -64,6 +74,14 @@ export default function RegisterScreen() {
       }>
 
       <GoogleSignInButton />
+
+      <Link href="/(auth)/otp?purpose=register" asChild>
+        <Pressable style={styles.otpLink}>
+          <AppText variant="bodySemibold" color={Brand.primary} style={styles.otpLinkText}>
+            {t('auth.createWithEmailCode')}
+          </AppText>
+        </Pressable>
+      </Link>
 
       <TextField
         label={t('auth.name')}
@@ -110,6 +128,14 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
+  otpLink: {
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  otpLinkText: {
+    textDecorationLine: 'underline',
+  },
   button: {
     marginTop: 6,
     marginBottom: 8,
@@ -125,6 +151,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'wrap',
     alignItems: 'center',
+    paddingHorizontal: 12,
   },
   footerLink: {
     textDecorationLine: 'underline',

@@ -4,17 +4,18 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/AppText';
 import { useAppType } from '@/components/AppText';
+import { useDialog } from '@/context/DialogContext';
 import { useLock } from '@/context/LockContext';
 import { isBiometricEnabled } from '@/lib/lock';
 import { Brand } from '@/constants/theme';
 
 export default function LockScreen() {
   const { t } = useTranslation();
+  const { showAlert } = useDialog();
   const { unlockWithPin, unlockWithBiometric, biometricAvailable } = useLock();
   const { type } = useAppType();
   const [pin, setPin] = useState('');
@@ -34,7 +35,7 @@ export default function LockScreen() {
     if (pin.length < 4) return;
     const ok = await unlockWithPin(pin);
     if (!ok) {
-      Alert.alert(t('lock.wrongPin'));
+      showAlert({ title: t('lock.wrongPin'), tone: 'error' });
       setPin('');
     }
   };

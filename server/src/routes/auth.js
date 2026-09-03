@@ -2,10 +2,26 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import User, { randomUnusedPassword } from '../models/User.js';
+import EmailOtp, {
+  generateOtpCode,
+  hashOtpCode,
+  otpExpiryDate,
+  RESEND_COOLDOWN_MS,
+  MAX_ATTEMPTS,
+} from '../models/EmailOtp.js';
+import { sendOtpEmail } from '../lib/sendOtpEmail.js';
 import { auth } from '../middleware/auth.js';
 
 const router = express.Router();
 const googleClient = new OAuth2Client();
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmail(email) {
+  return String(email || '')
+    .trim()
+    .toLowerCase();
+}
 
 const signToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '30d' });
@@ -83,8 +99,10 @@ router.post('/login', async (req, res, next) => {
 
 router.post('/google', async (req, res, next) => {
   try {
-    const { idToken, language, currency } = req.body;
-    if (!idToken) return res.status(400).json({ message: 'Google idToken is required' });
+    const { idToken, authCode, language, currency } = req.body;
+    if (!idToken && !authCode) {
+      return res.status(400).json({ message: 'Google idToken or authCode is required' });
+    }
 
     const audiences = allowedGoogleAudiences();
     if (!audiences.length) {
@@ -93,11 +111,39 @@ router.post('/google', async (req, res, next) => {
       });
     }
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: audiences,
-    });
-    const payload = ticket.getPayload();
+    let payload;
+
+    if (authCode) {
+      // Exchange auth code for tokens on the server side
+      const webClientId = (process.env.GOOGLE_CLIENT_IDS || '').split(',')[0]?.trim();
+      const webClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+      if (!webClientId || !webClientSecret) {
+        return res.status(503).json({
+          message: 'Server is not configured for auth code exchange. Set GOOGLE_CLIENT_SECRET.',
+        });
+      }
+      const { OAuth2Client: OC } = await import('google-auth-library');
+      const oauthClient = new OC(webClientId, webClientSecret);
+      const { tokens } = await oauthClient.getToken({
+        code: authCode,
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI || 'https://auth.expo.io/@anonymous/bachatcoach',
+      });
+      if (!tokens.id_token) {
+        return res.status(401).json({ message: 'Auth code exchange did not return id_token' });
+      }
+      const ticket = await googleClient.verifyIdToken({
+        idToken: tokens.id_token,
+        audience: audiences,
+      });
+      payload = ticket.getPayload();
+    } else {
+      const ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: audiences,
+      });
+      payload = ticket.getPayload();
+    }
+
     if (!payload?.sub || !payload.email) {
       return res.status(401).json({ message: 'Invalid Google token' });
     }
@@ -136,11 +182,154 @@ router.post('/google', async (req, res, next) => {
   }
 });
 
+router.post('/otp/send', async (req, res, next) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const purpose = req.body.purpose === 'register' ? 'register' : 'login';
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required' });
+    }
+
+    if (purpose === 'login') {
+      const existing = await User.findOne({ email });
+      if (!existing) {
+        return res.status(404).json({ message: 'No account found. Create an account first.' });
+      }
+    }
+
+    const recent = await EmailOtp.findOne({ email, purpose }).sort({ createdAt: -1 });
+    if (recent && Date.now() - new Date(recent.createdAt).getTime() < RESEND_COOLDOWN_MS) {
+      const waitSec = Math.ceil(
+        (RESEND_COOLDOWN_MS - (Date.now() - new Date(recent.createdAt).getTime())) / 1000
+      );
+      return res.status(429).json({
+        message: `Please wait ${waitSec}s before requesting another code`,
+        retryAfterSec: waitSec,
+      });
+    }
+
+    const code = generateOtpCode();
+    await EmailOtp.deleteMany({ email, purpose });
+    await EmailOtp.create({
+      email,
+      purpose,
+      codeHash: hashOtpCode(code),
+      expiresAt: otpExpiryDate(),
+      attempts: 0,
+    });
+
+    const { mode } = await sendOtpEmail(email, code);
+
+    const payload = {
+      message: 'Verification code sent',
+      email,
+      purpose,
+      expiresInSec: 600,
+    };
+    if (process.env.NODE_ENV === 'development' && mode === 'console') {
+      payload.devCode = code;
+    }
+
+    res.json(payload);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/otp/verify', async (req, res, next) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const code = String(req.body.code || '').trim();
+    const purpose = req.body.purpose === 'register' ? 'register' : 'login';
+    const { name, nameUr, language, currency } = req.body;
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required' });
+    }
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ message: 'Enter the 6-digit code' });
+    }
+
+    const record = await EmailOtp.findOne({ email, purpose }).sort({ createdAt: -1 });
+    if (!record) {
+      return res.status(400).json({ message: 'No code found. Request a new one.' });
+    }
+    if (record.expiresAt.getTime() < Date.now()) {
+      await EmailOtp.deleteMany({ email, purpose });
+      return res.status(400).json({ message: 'Code expired. Request a new one.' });
+    }
+    if (record.attempts >= MAX_ATTEMPTS) {
+      await EmailOtp.deleteMany({ email, purpose });
+      return res.status(429).json({ message: 'Too many attempts. Request a new code.' });
+    }
+
+    if (record.codeHash !== hashOtpCode(code)) {
+      record.attempts += 1;
+      await record.save();
+      const left = MAX_ATTEMPTS - record.attempts;
+      return res.status(401).json({
+        message: left > 0 ? `Invalid code. ${left} attempts left.` : 'Too many attempts. Request a new code.',
+      });
+    }
+
+    await EmailOtp.deleteMany({ email, purpose });
+
+    let user = await User.findOne({ email });
+
+    if (purpose === 'login') {
+      if (!user) {
+        return res.status(404).json({ message: 'No account found. Create an account first.' });
+      }
+    } else {
+      if (!user) {
+        const displayName = String(name || '').trim();
+        if (!displayName) {
+          return res.status(400).json({ message: 'Name is required to create an account' });
+        }
+        user = await User.create({
+          name: displayName,
+          nameUr: nameUr ? String(nameUr).trim() : '',
+          email,
+          password: randomUnusedPassword(),
+          language: language || 'en',
+          currency: currency ? String(currency).toUpperCase() : 'PKR',
+        });
+      }
+    }
+
+    const token = signToken(user._id);
+    res.json({ token, user: userResponse(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/me', auth, async (req, res, next) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ user: userResponse(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/account', auth, async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    const { default: Transaction } = await import('../models/Transaction.js');
+    const { default: Contact } = await import('../models/Contact.js');
+    const { default: Goal } = await import('../models/Goal.js');
+
+    await Promise.all([
+      Transaction.deleteMany({ user: userId }),
+      Contact.deleteMany({ user: userId }),
+      Goal.deleteMany({ user: userId }),
+    ]);
+    await User.findByIdAndDelete(userId);
+
+    res.json({ message: 'Account deleted' });
   } catch (err) {
     next(err);
   }

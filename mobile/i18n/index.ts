@@ -31,9 +31,12 @@ export const getStoredLanguage = async (): Promise<AppLanguage> => {
 };
 
 export const setStoredLanguage = async (lang: AppLanguage) => {
-  await AsyncStorage.setItem(LANGUAGE_KEY, lang);
-  configureNativeDirection(lang);
-  await i18n.changeLanguage(lang);
+  const next = normalizeLanguage(lang);
+  if (normalizeLanguage(i18n.language) === next) return;
+  // Persist in background; update UI immediately without remounting the tree.
+  void AsyncStorage.setItem(LANGUAGE_KEY, next);
+  configureNativeDirection(next);
+  await i18n.changeLanguage(next);
 };
 
 i18n.use(initReactI18next).init({

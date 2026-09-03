@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { View, Modal, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -25,7 +26,12 @@ export function BottomSheet({ visible, title, onClose, children }: BottomSheetPr
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
           <View style={styles.handle} />
-          <AppText variant="h2" color={colors.text} style={styles.title}>{title}</AppText>
+          <View style={styles.titleRow}>
+            <AppText variant="h2" color={colors.text} style={styles.title}>{title}</AppText>
+            <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
+              <Ionicons name="close" size={22} color={colors.muted ?? '#94A3B8'} />
+            </Pressable>
+          </View>
           {children}
         </View>
       </KeyboardAvoidingView>
@@ -51,5 +57,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 16,
   },
-  title: { marginBottom: 16 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  title: { marginBottom: 0 },
+  closeBtn: { padding: 4 },
 });

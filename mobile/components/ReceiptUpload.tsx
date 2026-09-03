@@ -1,8 +1,9 @@
-import { View, Image, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Image, Pressable, StyleSheet } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/AppText';
+import { useDialog } from '@/context/DialogContext';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Brand, Radius } from '@/constants/theme';
@@ -40,13 +41,18 @@ async function pickFromCamera() {
 
 export function ReceiptUpload({ previewUri, onChange, accent = Brand.primary }: ReceiptUploadProps) {
   const { t } = useTranslation();
+  const { showAlert } = useDialog();
   const colors = Colors[useColorScheme() ?? 'light'];
 
   const handlePick = async (source: 'library' | 'camera') => {
     const result = source === 'camera' ? await pickFromCamera() : await pickFromLibrary();
 
     if (!result) {
-      Alert.alert(t('expenses.receipt'), t('expenses.photoPermission'));
+      showAlert({
+        title: t('expenses.receipt'),
+        message: t('expenses.photoPermission'),
+        tone: 'warning',
+      });
       return;
     }
 

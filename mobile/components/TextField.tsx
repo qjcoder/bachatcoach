@@ -14,7 +14,16 @@ type TextFieldProps = TextInputProps & {
   onTrailingPress?: () => void;
 };
 
-export function TextField({ label, icon, trailingIcon, onTrailingPress, style, secureTextEntry, ...props }: TextFieldProps) {
+export function TextField({
+  label,
+  icon,
+  trailingIcon,
+  onTrailingPress,
+  style,
+  secureTextEntry,
+  placeholder,
+  ...props
+}: TextFieldProps) {
   const { lang } = useAppType();
   const isRTL = useIsRTL();
   const [focused, setFocused] = useState(false);
@@ -25,21 +34,16 @@ export function TextField({ label, icon, trailingIcon, onTrailingPress, style, s
   const bgColor = focused ? '#F0FDF4' : '#F8FAFC';
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { direction: isRTL ? 'rtl' : 'ltr' }]}>
       {label ? (
         <AppText variant="label" style={[styles.label, focused && styles.labelFocused]}>
           {label}
         </AppText>
       ) : null}
 
-      <View style={[styles.inputRow, isRTL && styles.inputRowRTL, { borderColor, backgroundColor: bgColor }]}>
+      <View style={[styles.inputRow, { borderColor, backgroundColor: bgColor }]}>
         {icon ? (
-          <Ionicons
-            name={icon}
-            size={19}
-            color={iconColor}
-            style={isRTL ? styles.iconRTL : styles.iconLTR}
-          />
+          <Ionicons name={icon} size={19} color={iconColor} style={styles.leadingIcon} />
         ) : null}
 
         <TextInput
@@ -53,6 +57,8 @@ export function TextField({ label, icon, trailingIcon, onTrailingPress, style, s
             },
             style,
           ]}
+          // English placeholders mis-align under Urdu RTL — omit them.
+          placeholder={isRTL ? undefined : placeholder}
           placeholderTextColor="#94A3B8"
           textAlignVertical="center"
           secureTextEntry={hidden}
@@ -62,11 +68,11 @@ export function TextField({ label, icon, trailingIcon, onTrailingPress, style, s
         />
 
         {secureTextEntry ? (
-          <Pressable onPress={() => setHidden(h => !h)} style={styles.eyeBtn} hitSlop={10}>
+          <Pressable onPress={() => setHidden((h) => !h)} style={styles.trailingBtn} hitSlop={10}>
             <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={Brand.textMuted} />
           </Pressable>
         ) : trailingIcon ? (
-          <Pressable onPress={onTrailingPress} style={styles.eyeBtn} hitSlop={10}>
+          <Pressable onPress={onTrailingPress} style={styles.trailingBtn} hitSlop={10}>
             <Ionicons name={trailingIcon} size={20} color={Brand.textMuted} />
           </Pressable>
         ) : null}
@@ -76,7 +82,7 @@ export function TextField({ label, icon, trailingIcon, onTrailingPress, style, s
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: 14 },
+  wrap: { marginBottom: 14, width: '100%' },
   label: { marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
   labelFocused: { color: Brand.primary },
 
@@ -88,16 +94,15 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: 14,
     overflow: 'hidden',
+    width: '100%',
   },
-  inputRowRTL: { flexDirection: 'row-reverse' },
 
-  iconLTR: { marginRight: 10 },
-  iconRTL: { marginLeft: 10 },
-
-  eyeBtn: { marginLeft: 8 },
+  leadingIcon: { marginEnd: 10, flexShrink: 0 },
+  trailingBtn: { marginStart: 8, flexShrink: 0 },
 
   input: {
     flex: 1,
+    minWidth: 0,
     color: Brand.text,
     ...(Platform.OS === 'ios'
       ? { paddingVertical: 14, lineHeight: 20 }

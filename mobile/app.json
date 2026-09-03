@@ -6,8 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": [
-      "bachatcoach",
-      "com.googleusercontent.apps.966711411072-gdj8p0120sqshgobnkvnbkk02vbh0bb5"
+      "com.googleusercontent.apps.966711411072-gdj8p0120sqshgobnkvnbkk02vbh0bb5",
+      "bachatcoach"
     ],
     "userInterfaceStyle": "automatic",
     "ios": {

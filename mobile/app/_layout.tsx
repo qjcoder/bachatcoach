@@ -6,7 +6,9 @@ import 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 
 import { AuthProvider } from '@/context/AuthContext';
+import { DialogProvider } from '@/context/DialogContext';
 import { LockProvider } from '@/context/LockContext';
+import { ThemeProvider } from '@/context/ThemeContext';
 import { LockGate } from '@/components/LockGate';
 import { SplashView } from '@/components/SplashView';
 import { AppDirection } from '@/components/AppDirection';
@@ -68,10 +70,12 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AppDirection key={i18n.language}>
-        <RootLayoutNav headerOptions={headerOptions} />
-        {showSplash && <SplashView onFinish={onSplashFinish} />}
-      </AppDirection>
+      <ThemeProvider>
+        <AppDirection>
+          <RootLayoutNav headerOptions={headerOptions} />
+          {showSplash && <SplashView onFinish={onSplashFinish} />}
+        </AppDirection>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
@@ -81,26 +85,28 @@ function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
 
   return (
     <AuthProvider>
-      <LockProvider>
-        <LockGate>
-          <Stack screenOptions={headerOptions}>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="add-transaction"
-              options={{
-                presentation: 'modal',
-                title: t('expenses.addExpense'),
-                ...headerOptions,
-              }}
-            />
-            <Stack.Screen
-              name="goals"
-              options={{ title: t('goals.title'), ...headerOptions }}
-            />
-          </Stack>
-        </LockGate>
-      </LockProvider>
+      <DialogProvider>
+        <LockProvider>
+          <LockGate>
+            <Stack screenOptions={headerOptions}>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="add-transaction"
+                options={{
+                  presentation: 'modal',
+                  title: t('expenses.addExpense'),
+                  ...headerOptions,
+                }}
+              />
+              <Stack.Screen
+                name="goals"
+                options={{ title: t('goals.title'), ...headerOptions }}
+              />
+            </Stack>
+          </LockGate>
+        </LockProvider>
+      </DialogProvider>
     </AuthProvider>
   );
 }

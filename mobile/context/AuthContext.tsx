@@ -31,6 +31,15 @@ type AuthContextType = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  sendEmailOtp: (email: string, purpose: 'login' | 'register') => Promise<{ message: string; retryAfterSec?: number; devCode?: string }>;
+  loginWithEmailOtp: (params: {
+    email: string;
+    code: string;
+    purpose: 'login' | 'register';
+    name?: string;
+    nameUr?: string;
+    language?: AppLanguage;
+  }) => Promise<void>;
   register: (
     name: string,
     email: string,
@@ -42,6 +51,7 @@ type AuthContextType = {
   updateCurrency: (currency: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -108,6 +118,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persistSession(data.token, data.user);
   };
 
+  const sendEmailOtp = async (email: string, purpose: 'login' | 'register') => {
+    const { data } = await api.post('/auth/otp/send', {
+      email: email.trim().toLowerCase(),
+      purpose,
+    });
+    return data as { message: string; retryAfterSec?: number; devCode?: string };
+  };
+
+  const loginWithEmailOtp = async (params: {
+    email: string;
+    code: string;
+    purpose: 'login' | 'register';
+    name?: string;
+    nameUr?: string;
+    language?: AppLanguage;
+  }) => {
+    const language = params.language || 'en';
+    const currency = getDefaultCurrencyForLanguage(language);
+    const { data } = await api.post('/auth/otp/verify', {
+      email: params.email.trim().toLowerCase(),
+      code: params.code.trim(),
+      purpose: params.purpose,
+      name: params.name,
+      nameUr: params.nameUr,
+      language,
+      currency,
+    });
+    await persistSession(data.token, data.user);
+  };
+
   const register = async (
     name: string,
     email: string,
@@ -144,6 +184,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(updated);
   };
 
+  const deleteAccount = async () => {
+    await api.delete('/auth/account');
+    await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('user');
+    await clearGoogleTokens();
+    setUser(null);
+    router.replace('/(auth)/login');
+  };
+
   const logout = async () => {
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('user');
@@ -159,11 +208,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         loginWithGoogle,
+        sendEmailOtp,
+        loginWithEmailOtp,
         register,
         updateProfile,
         updateCurrency,
         refreshUser,
         logout,
+        deleteAccount,
       }}>
       {children}
     </AuthContext.Provider>

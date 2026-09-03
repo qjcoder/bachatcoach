@@ -1,5 +1,6 @@
-import { Linking, Alert } from 'react-native';
+import { Linking } from 'react-native';
 
+import { showAppAlert } from '@/context/DialogContext';
 import { formatMoney } from '@/lib/format';
 
 function normalizePakPhone(phone: string): string {
@@ -29,7 +30,11 @@ export async function sendWhatsAppReminder(
 ): Promise<void> {
   const normalized = normalizePakPhone(phone);
   if (normalized.length < 12) {
-    Alert.alert('Invalid number', 'Please add a valid Pakistan phone number (e.g. 03001234567)');
+    showAppAlert(
+      'Invalid number',
+      'Please add a valid Pakistan phone number (e.g. 03001234567)',
+      'error'
+    );
     return;
   }
 

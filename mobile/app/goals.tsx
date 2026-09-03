@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Pressable, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Pressable } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import { useFormatPKR } from '@/lib/format';
+import { useDialog } from '@/context/DialogContext';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -34,6 +35,7 @@ const GOAL_ICONS = GOAL_ICON_OPTIONS.map((o) => o.key);
 
 export default function GoalsScreen() {
   const { t, i18n } = useTranslation();
+  const { showAlert } = useDialog();
   const formatPKR = useFormatPKR();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
@@ -64,7 +66,7 @@ export default function GoalsScreen() {
 
   const createGoal = async () => {
     if (!title || !targetAmount) {
-      Alert.alert('Error', t('goals.fillRequired'));
+      showAlert({ title: t('common.error'), message: t('goals.fillRequired'), tone: 'error' });
       return;
     }
     await api.post('/goals', {

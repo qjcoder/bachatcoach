@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   TextInput,
   Pressable,
   KeyboardAvoidingView,
@@ -23,6 +22,7 @@ import { FormSection } from '@/components/FormSection';
 import { TransactionDateTime } from '@/components/TransactionDateTime';
 import { ReceiptUpload } from '@/components/ReceiptUpload';
 import { RTLRow } from '@/components/RTLRow';
+import { useDialog } from '@/context/DialogContext';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS } from '@/constants/theme';
 import { Brand, Radius, Shadow, Spacing } from '@/constants/theme';
 import { isOtherCategory } from '@/lib/category';
@@ -70,6 +70,7 @@ export default function AddTransactionScreen() {
 
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { showAlert } = useDialog();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -97,11 +98,15 @@ export default function AddTransactionScreen() {
 
   const save = async () => {
     if (!amount || Number(amount) <= 0) {
-      Alert.alert('Error', t('expenses.invalidAmount'));
+      showAlert({ title: t('common.error'), message: t('expenses.invalidAmount'), tone: 'error' });
       return;
     }
     if (isOtherCategory(category) && !customCategory.trim()) {
-      Alert.alert('Error', t('expenses.customCategoryRequired'));
+      showAlert({
+        title: t('common.error'),
+        message: t('expenses.customCategoryRequired'),
+        tone: 'error',
+      });
       return;
     }
     setLoading(true);
@@ -118,7 +123,7 @@ export default function AddTransactionScreen() {
       });
       router.back();
     } catch {
-      Alert.alert('Error', t('expenses.saveFailed'));
+      showAlert({ title: t('common.error'), message: t('expenses.saveFailed'), tone: 'error' });
     } finally {
       setLoading(false);
     }
