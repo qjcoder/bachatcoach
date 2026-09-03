@@ -1,12 +1,21 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { OAuth2Client } from 'google-auth-library';
+import User, { randomUnusedPassword } from '../models/User.js';
 import { auth } from '../middleware/auth.js';
 
 const router = express.Router();
+const googleClient = new OAuth2Client();
 
 const signToken = (userId) =>
   jwt.sign({ userId }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '30d' });
+
+function allowedGoogleAudiences() {
+  return String(process.env.GOOGLE_CLIENT_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 function userResponse(user) {
   return {
@@ -18,6 +27,10 @@ function userResponse(user) {
     currency: user.currency,
     salaryDay: user.salaryDay,
     avatar: user.avatar || '',
+    googleLinked: Boolean(user.googleId),
+    backupEnabled: Boolean(user.backupEnabled),
+    backupFrequency: user.backupFrequency || 'off',
+    lastBackupAt: user.lastBackupAt || null,
   };
 }
 
@@ -64,6 +77,61 @@ router.post('/login', async (req, res, next) => {
       user: userResponse(user),
     });
   } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/google', async (req, res, next) => {
+  try {
+    const { idToken, language, currency } = req.body;
+    if (!idToken) return res.status(400).json({ message: 'Google idToken is required' });
+
+    const audiences = allowedGoogleAudiences();
+    if (!audiences.length) {
+      return res.status(503).json({
+        message: 'Google Sign-In is not configured. Set GOOGLE_CLIENT_IDS on the server.',
+      });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: audiences,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.sub || !payload.email) {
+      return res.status(401).json({ message: 'Invalid Google token' });
+    }
+
+    const googleId = payload.sub;
+    const email = String(payload.email).toLowerCase();
+    const name = payload.name || email.split('@')[0];
+    const avatar = payload.picture || '';
+
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      if (!user.googleId) user.googleId = googleId;
+      if (avatar && !user.avatar) user.avatar = avatar;
+      if (name && user.name === user.email.split('@')[0]) user.name = name;
+      await user.save();
+    } else {
+      user = await User.create({
+        name,
+        email,
+        googleId,
+        password: randomUnusedPassword(),
+        avatar,
+        language: language || 'en',
+        currency: currency ? String(currency).toUpperCase() : 'PKR',
+      });
+    }
+
+    const token = signToken(user._id);
+    res.json({ token, user: userResponse(user) });
+  } catch (err) {
+    if (err?.message?.includes('Wrong number of segments') || err?.message?.includes('Token used too early')) {
+      return res.status(401).json({ message: 'Invalid Google token' });
+    }
     next(err);
   }
 });

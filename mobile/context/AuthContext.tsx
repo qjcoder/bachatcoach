@@ -6,6 +6,8 @@ import api from '@/lib/api';
 import { setStoredLanguage } from '@/i18n';
 import { type AppLanguage } from '@/lib/language';
 import { getDefaultCurrencyForLanguage } from '@/constants/languages';
+import { clearGoogleTokens } from '@/lib/googleAuth';
+import type { BackupFrequency } from '@/lib/googleDriveBackup';
 
 type User = {
   id: string;
@@ -16,6 +18,10 @@ type User = {
   currency: string;
   salaryDay: number;
   avatar?: string;
+  googleLinked?: boolean;
+  backupEnabled?: boolean;
+  backupFrequency?: BackupFrequency;
+  lastBackupAt?: string | null;
 };
 
 type ProfilePatch = Partial<Pick<User, 'currency' | 'avatar' | 'name' | 'nameUr' | 'language'>>;
@@ -24,6 +30,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (
     name: string,
     email: string,
@@ -33,6 +40,7 @@ type AuthContextType = {
   ) => Promise<void>;
   updateProfile: (patch: ProfilePatch) => Promise<void>;
   updateCurrency: (currency: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -93,6 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persistSession(data.token, data.user);
   };
 
+  const loginWithGoogle = async (idToken: string) => {
+    const language = user?.language;
+    const currency = language ? getDefaultCurrencyForLanguage(language) : undefined;
+    const { data } = await api.post('/auth/google', { idToken, language, currency });
+    await persistSession(data.token, data.user);
+  };
+
   const register = async (
     name: string,
     email: string,
@@ -117,15 +132,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await updateProfile({ currency });
   };
 
+  const refreshUser = async () => {
+    const { data } = await api.get('/auth/me');
+    if (!user) {
+      setUser(data.user);
+      await SecureStore.setItemAsync('user', JSON.stringify(data.user));
+      return;
+    }
+    const updated = { ...user, ...data.user };
+    await SecureStore.setItemAsync('user', JSON.stringify(updated));
+    setUser(updated);
+  };
+
   const logout = async () => {
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('user');
+    await clearGoogleTokens();
     setUser(null);
     router.replace('/(auth)/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, updateProfile, updateCurrency, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        loginWithGoogle,
+        register,
+        updateProfile,
+        updateCurrency,
+        refreshUser,
+        logout,
+      }}>
       {children}
     </AuthContext.Provider>
   );

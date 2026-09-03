@@ -7,6 +7,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { AuthScreen } from '@/components/AuthScreen';
 import { TextField } from '@/components/TextField';
+import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { Brand } from '@/constants/theme';
 
 export default function LoginScreen() {
@@ -25,7 +26,9 @@ export default function LoginScreen() {
     try {
       await login(email.trim().toLowerCase(), password);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Login failed';
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Login failed');
       Alert.alert('Error', message);
     } finally {
       setLoading(false);
@@ -46,6 +49,7 @@ export default function LoginScreen() {
           </Link>
         </View>
       }>
+      <GoogleSignInButton />
       <TextField
         label={t('auth.email')}
         icon="mail-outline"

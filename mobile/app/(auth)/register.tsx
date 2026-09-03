@@ -8,6 +8,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { AuthScreen } from '@/components/AuthScreen';
 import { TextField } from '@/components/TextField';
+import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { Brand } from '@/constants/theme';
 
 export default function RegisterScreen() {
@@ -61,6 +62,7 @@ export default function RegisterScreen() {
           </Link>
         </View>
       }>
+      <GoogleSignInButton />
       <TextField
         label={t('auth.name')}
         icon="person-outline"

@@ -39,6 +39,7 @@ import { CURRENCIES, getCurrency } from '@/constants/currencies';
 import { UserAvatar } from '@/components/UserAvatar';
 import { pickProfileFromCamera, pickProfileFromLibrary } from '@/lib/profileImage';
 import { useUserDisplayName } from '@/hooks/useUserDisplayName';
+import { DriveBackupSection } from '@/components/DriveBackupSection';
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -284,6 +285,8 @@ export default function SettingsScreen() {
           />
         </Pressable>
       </Card>
+
+      <DriveBackupSection />
 
       <Button title={t('settings.logout')} onPress={logout} variant="outline" style={styles.logout} />
 

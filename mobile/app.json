@@ -53,7 +53,8 @@
           "cameraPermission": "Allow BachatCoach to use the camera to photograph receipts."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
