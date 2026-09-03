@@ -5,12 +5,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { BrandLogo } from '@/components/BrandLogo';
-import { Brand } from '@/constants/theme';
+
+const { width } = Dimensions.get('window');
 
 type AuthScreenProps = {
   title: string;
@@ -26,33 +28,41 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <LinearGradient
+        colors={['#064E3B', '#065F46', '#047857', '#059669', '#10B981']}
+        locations={[0, 0.25, 0.5, 0.75, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Decorative blobs */}
+      <View style={[styles.blob, styles.blobTL]} />
+      <View style={[styles.blob, styles.blobBR]} />
+      <View style={[styles.blob, styles.blobM]} />
+
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingBottom: insets.bottom + 24 },
-        ]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}>
-        <LinearGradient
-          colors={['#10B981', '#059669', '#047857', '#065F46']}
-          locations={[0, 0.35, 0.7, 1]}
-          style={[styles.hero, { paddingTop: insets.top + 20 }]}>
-          <View style={styles.heroPattern}>
-            <View style={[styles.circle, styles.circleA]} />
-            <View style={[styles.circle, styles.circleB]} />
+
+        {/* Logo + heading */}
+        <View style={styles.hero}>
+          <View style={styles.logoRing}>
+            <BrandLogo size={60} />
           </View>
-          <BrandLogo size={80} />
           <AppText variant="h1" color="#FFFFFF" align="center" style={styles.title}>
             {title}
           </AppText>
-          <AppText variant="bodySmall" color="rgba(255,255,255,0.88)" align="center" style={styles.subtitle}>
+          <AppText variant="bodySmall" color="rgba(255,255,255,0.75)" align="center" style={styles.subtitle}>
             {subtitle}
           </AppText>
-        </LinearGradient>
+        </View>
 
-        <View style={styles.cardWrap}>
-          <View style={styles.card}>{children}</View>
+        {/* Glass card */}
+        <View style={styles.glass}>
+          {children}
         </View>
 
         {footer ? <View style={styles.footer}>{footer}</View> : null}
@@ -62,69 +72,52 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Brand.background,
-  },
-  scroll: {
-    flexGrow: 1,
-  },
-  hero: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    overflow: 'hidden',
-  },
-  heroPattern: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  circle: {
+  root: { flex: 1 },
+  scroll: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 20 },
+
+  /* Blobs */
+  blob: {
     position: 'absolute',
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  circleA: {
-    width: 180,
-    height: 180,
-    top: -50,
-    right: -30,
-  },
-  circleB: {
-    width: 140,
-    height: 140,
-    bottom: 10,
-    left: -40,
-  },
-  title: {
-    marginTop: 16,
-    maxWidth: 300,
-  },
-  subtitle: {
-    marginTop: 6,
-    maxWidth: 280,
-  },
-  cardWrap: {
-    marginTop: -20,
-    marginHorizontal: 20,
-    zIndex: 2,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: 12,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(226,232,240,0.8)',
-  },
-  footer: {
-    marginTop: 20,
+  blobTL: { width: 280, height: 280, top: -100, left: -80 },
+  blobBR: { width: 220, height: 220, bottom: 40, right: -60 },
+  blobM:  { width: 160, height: 160, top: '40%', left: -50, backgroundColor: 'rgba(255,255,255,0.04)' },
+
+  /* Hero */
+  hero: { alignItems: 'center', marginBottom: 28, width: '100%' },
+  logoRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
+    marginBottom: 16,
   },
+  title: { fontWeight: '800', letterSpacing: -0.5 },
+  subtitle: { marginTop: 4, maxWidth: 260 },
+
+  /* Glass card */
+  glass: {
+    width: '100%',
+    maxWidth: width - 40,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    elevation: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+  },
+
+  footer: { marginTop: 24, alignItems: 'center' },
 });

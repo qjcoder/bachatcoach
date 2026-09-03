@@ -54,8 +54,11 @@ export default function LoansScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [exportingContactId, setExportingContactId] = useState<string | null>(null);
 
-  const load = async () => {
-    const { data } = await api.get('/contacts', { params: { direction: tab } });
+  const load = async (fresh = false) => {
+    const { data } = await api.get('/contacts', {
+      params: { direction: tab },
+      headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
+    });
     setContacts(data);
   };
 
@@ -217,7 +220,7 @@ export default function LoansScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await load();
+              await load(true);
               setRefreshing(false);
             }}
             tintColor={Brand.primary}

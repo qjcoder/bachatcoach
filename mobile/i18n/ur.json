@@ -32,7 +32,7 @@
   },
   "backup": {
     "title": "Google Drive بیک اپ",
-    "subtitle": "اپنا ڈیٹا اپنے Google Drive میں محفوظ کریں",
+    "subtitle": "بیک اپ صرف آپ کے Google Drive میں — ہمارے سرورز پر نہیں",
     "enable": "آٹو بیک اپ",
     "frequency": "بیک اپ فریکوئنسی",
     "daily": "روزانہ",

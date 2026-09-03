@@ -32,7 +32,7 @@
   },
   "backup": {
     "title": "Google Drive Backup",
-    "subtitle": "Apna data Google Drive mein mehfooz karein",
+    "subtitle": "Backup sirf aap ke Google Drive mein — hamare servers par nahi",
     "enable": "Auto backup",
     "frequency": "Backup frequency",
     "daily": "Rozana",

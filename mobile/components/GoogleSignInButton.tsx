@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
+import { Alert, Pressable, StyleSheet, View, ActivityIndicator, Image } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { Brand, Radius } from '@/constants/theme';
 import {
@@ -14,6 +14,37 @@ import { useAuth } from '@/context/AuthContext';
 type Props = {
   onSuccess?: () => void;
 };
+
+/** Google "G" logo rendered via text — no external image needed. */
+function GoogleG() {
+  return (
+    <View style={gStyles.container}>
+      <AppText style={gStyles.g}>G</AppText>
+    </View>
+  );
+}
+
+const gStyles = StyleSheet.create({
+  container: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  g: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4285F4',
+    lineHeight: 22,
+  },
+});
 
 export function GoogleSignInButton({ onSuccess }: Props) {
   const { t } = useTranslation();
@@ -68,21 +99,30 @@ export function GoogleSignInButton({ onSuccess }: Props) {
       <Pressable
         onPress={handlePress}
         disabled={loading || !request}
-        style={({ pressed }) => [styles.btn, pressed && styles.pressed, (loading || !request) && styles.disabled]}>
-        {loading ? (
-          <ActivityIndicator color={Brand.text} />
-        ) : (
-          <>
-            <Ionicons name="logo-google" size={20} color="#EA4335" />
-            <AppText variant="bodySemibold" color={Brand.text} style={styles.label}>
-              {t('auth.continueWithGoogle')}
-            </AppText>
-          </>
-        )}
+        style={({ pressed }) => [styles.pressable, pressed && styles.pressed, (loading || !request) && styles.disabled]}>
+        <LinearGradient
+          colors={['#4285F4', '#34A853', '#FBBC05', '#EA4335']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.gradientBorder}>
+          <View style={styles.inner}>
+            {loading ? (
+              <ActivityIndicator color={Brand.text} size="small" />
+            ) : (
+              <>
+                <GoogleG />
+                <AppText variant="bodySemibold" color={Brand.text} style={styles.label}>
+                  {t('auth.continueWithGoogle')}
+                </AppText>
+              </>
+            )}
+          </View>
+        </LinearGradient>
       </Pressable>
+
       <View style={styles.dividerRow}>
         <View style={styles.line} />
-        <AppText variant="caption" color={Brand.textMuted} style={styles.or}>
+        <AppText variant="caption" color={Brand.textMuted} style={styles.orText}>
           {t('auth.orEmail')}
         </AppText>
         <View style={styles.line} />
@@ -92,29 +132,35 @@ export function GoogleSignInButton({ onSuccess }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: 8 },
-  btn: {
+  wrap: { marginBottom: 4 },
+
+  pressable: { borderRadius: Radius.lg },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
+  disabled: { opacity: 0.55 },
+
+  gradientBorder: {
+    borderRadius: Radius.lg,
+    padding: 1.5,
+  },
+  inner: {
     minHeight: 52,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Brand.border,
+    borderRadius: Radius.lg - 1,
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
+    gap: 12,
+    paddingHorizontal: 18,
   },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.6 },
-  label: { marginLeft: 4 },
+  label: { fontSize: 15, letterSpacing: 0.1 },
+
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 20,
+    marginBottom: 4,
     gap: 10,
   },
-  line: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: Brand.border },
-  or: { textTransform: 'uppercase' },
+  line: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: '#CBD5E1' },
+  orText: { textTransform: 'uppercase', letterSpacing: 1.2, fontSize: 11 },
 });

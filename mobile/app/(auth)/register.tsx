@@ -22,7 +22,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Error', 'Please fill all fields');
+      Alert.alert('Error', 'Please fill all required fields');
       return;
     }
     if (password.length < 6) {
@@ -54,15 +54,17 @@ export default function RegisterScreen() {
       subtitle={t('common.tagline')}
       footer={
         <View style={styles.footerRow}>
-          <AppText variant="body" color={Brand.textMuted}>{t('auth.hasAccount')} </AppText>
+          <AppText variant="body" color="rgba(255,255,255,0.75)">{t('auth.hasAccount')} </AppText>
           <Link href="/(auth)/login" asChild>
             <Pressable>
-              <AppText variant="bodySemibold" color={Brand.primary}>{t('auth.login')}</AppText>
+              <AppText variant="bodySemibold" color="#FFFFFF" style={styles.footerLink}>{t('auth.login')}</AppText>
             </Pressable>
           </Link>
         </View>
       }>
+
       <GoogleSignInButton />
+
       <TextField
         label={t('auth.name')}
         icon="person-outline"
@@ -72,7 +74,7 @@ export default function RegisterScreen() {
         autoComplete="name"
       />
       <TextField
-        label={t('auth.nameUr')}
+        label={`${t('auth.nameUr')} (optional)`}
         icon="language-outline"
         placeholder="احمد خان"
         value={nameUr}
@@ -109,17 +111,23 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   button: {
-    marginTop: 8,
-    marginBottom: 12,
+    marginTop: 6,
+    marginBottom: 8,
+    borderRadius: 16,
     shadowColor: Brand.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  footerLink: {
+    textDecorationLine: 'underline',
+    textDecorationColor: 'rgba(255,255,255,0.6)',
   },
 });

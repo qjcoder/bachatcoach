@@ -8,11 +8,31 @@ if (!cached) {
   cached = globalThis.__bachatcoachMongoose = { conn: null, promise: null };
 }
 
+/**
+ * Tiny pool for Atlas M0 + Vercel: avoid connection storms that throttle free clusters.
+ */
+const connectOptions = {
+  maxPoolSize: 1,
+  minPoolSize: 0,
+  maxIdleTimeMS: 10_000,
+  serverSelectionTimeoutMS: 8_000,
+  socketTimeoutMS: 20_000,
+};
+
 export async function connectDb() {
-  if (cached.conn) return cached.conn;
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(uri).then((m) => m);
+  if (cached.conn) {
+    if (mongoose.connection.readyState === 1) return cached.conn;
+    cached.conn = null;
+    cached.promise = null;
   }
-  cached.conn = await cached.promise;
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(uri, connectOptions).then((m) => m);
+  }
+  try {
+    cached.conn = await cached.promise;
+  } catch (err) {
+    cached.promise = null;
+    throw err;
+  }
   return cached.conn;
 }

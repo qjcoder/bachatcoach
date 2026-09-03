@@ -62,10 +62,11 @@ export default function ExpensesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState<TransactionPeriod>('month');
 
-  const load = useCallback(async (activePeriod: TransactionPeriod) => {
+  const load = useCallback(async (activePeriod: TransactionPeriod, fresh = false) => {
     const { from, to } = getTransactionPeriodRange(activePeriod);
     const { data } = await api.get('/transactions', {
       params: { from, to, limit: periodFetchLimit(activePeriod) },
+      headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
     });
     setItems(data);
   }, []);
@@ -79,7 +80,7 @@ export default function ExpensesScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await load(period);
+      await load(period, true);
     } finally {
       setRefreshing(false);
     }

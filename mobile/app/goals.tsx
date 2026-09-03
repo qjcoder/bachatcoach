@@ -49,8 +49,10 @@ export default function GoalsScreen() {
   const [contributeAmount, setContributeAmount] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('target');
 
-  const load = async () => {
-    const { data } = await api.get('/goals');
+  const load = async (fresh = false) => {
+    const { data } = await api.get('/goals', {
+      headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
+    });
     setGoals(data);
   };
 
@@ -104,7 +106,7 @@ export default function GoalsScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await load();
+              await load(true);
               setRefreshing(false);
             }}
             tintColor={Brand.primary}

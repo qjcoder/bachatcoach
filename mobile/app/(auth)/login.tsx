@@ -41,15 +41,17 @@ export default function LoginScreen() {
       subtitle={t('auth.subtitle')}
       footer={
         <View style={styles.footerRow}>
-          <AppText variant="body" color={Brand.textMuted}>{t('auth.noAccount')} </AppText>
+          <AppText variant="body" color="rgba(255,255,255,0.75)">{t('auth.noAccount')} </AppText>
           <Link href="/(auth)/register" asChild>
             <Pressable>
-              <AppText variant="bodySemibold" color={Brand.primary}>{t('auth.register')}</AppText>
+              <AppText variant="bodySemibold" color="#FFFFFF" style={styles.footerLink}>{t('auth.register')}</AppText>
             </Pressable>
           </Link>
         </View>
       }>
+
       <GoogleSignInButton />
+
       <TextField
         label={t('auth.email')}
         icon="mail-outline"
@@ -67,7 +69,7 @@ export default function LoginScreen() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
-        autoComplete="password"
+        autoComplete="current-password"
       />
       <Button
         title={loading ? t('common.loading') : t('auth.login')}
@@ -81,17 +83,23 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   button: {
-    marginTop: 8,
-    marginBottom: 12,
+    marginTop: 6,
+    marginBottom: 8,
+    borderRadius: 16,
     shadowColor: Brand.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  footerLink: {
+    textDecorationLine: 'underline',
+    textDecorationColor: 'rgba(255,255,255,0.6)',
   },
 });

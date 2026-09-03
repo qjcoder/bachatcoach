@@ -57,8 +57,11 @@ export default function HomeScreen() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = async () => {
-    const { data } = await api.get('/dashboard/summary', { params: { lang: i18n.language } });
+  const load = async (fresh = false) => {
+    const { data } = await api.get('/dashboard/summary', {
+      params: { lang: i18n.language },
+      headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
+    });
     setSummary(data);
   };
 
@@ -71,7 +74,7 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await load();
+      await load(true);
     } finally {
       setRefreshing(false);
     }

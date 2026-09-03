@@ -40,4 +40,6 @@ contactSchema.virtual('balance').get(function balance() {
 contactSchema.set('toJSON', { virtuals: true });
 contactSchema.set('toObject', { virtuals: true });
 
+contactSchema.index({ user: 1, isSettled: 1, direction: 1 });
+
 export default mongoose.model('Contact', contactSchema);

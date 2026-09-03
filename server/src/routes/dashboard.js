@@ -24,6 +24,21 @@ function userObjectId(req) {
   return new mongoose.Types.ObjectId(req.userId);
 }
 
+/** Lean docs have no virtual `balance` — compute from entries. */
+function contactBalance(c) {
+  let total = 0;
+  for (const entry of c.entries || []) {
+    if (c.direction === 'i_lent') {
+      if (entry.type === 'lent') total += entry.amount;
+      if (entry.type === 'repaid') total -= entry.amount;
+    } else {
+      if (entry.type === 'received') total += entry.amount;
+      if (entry.type === 'paid_back') total -= entry.amount;
+    }
+  }
+  return total;
+}
+
 router.get('/summary', async (req, res, next) => {
   try {
     const userId = userObjectId(req);
@@ -36,39 +51,46 @@ router.get('/summary', async (req, res, next) => {
     const prevYear = month === 1 ? year - 1 : year;
     const prevRange = monthRange(prevMonth, prevYear);
 
-    const [current, previous, lentContacts, borrowedContacts, goals] = await Promise.all([
+    // One Transaction aggregation + lean contact/goal reads (Atlas M0 friendly).
+    const [txFacet, lentContacts, borrowedContacts, goals] = await Promise.all([
       Transaction.aggregate([
         {
           $match: {
             user: userId,
-            date: { $gte: start, $lt: end },
+            date: { $gte: prevRange.start, $lt: end },
           },
         },
         {
-          $group: {
-            _id: '$type',
-            total: { $sum: '$amount' },
+          $facet: {
+            current: [
+              { $match: { date: { $gte: start, $lt: end } } },
+              { $group: { _id: '$type', total: { $sum: '$amount' } } },
+            ],
+            previous: [
+              { $match: { date: { $gte: prevRange.start, $lt: prevRange.end } } },
+              { $group: { _id: '$type', total: { $sum: '$amount' } } },
+            ],
+            categoryBreakdown: [
+              { $match: { type: 'expense', date: { $gte: start, $lt: end } } },
+              { $group: { _id: '$category', total: { $sum: '$amount' } } },
+              { $sort: { total: -1 } },
+            ],
           },
         },
       ]),
-      Transaction.aggregate([
-        {
-          $match: {
-            user: userId,
-            date: { $gte: prevRange.start, $lt: prevRange.end },
-          },
-        },
-        {
-          $group: {
-            _id: '$type',
-            total: { $sum: '$amount' },
-          },
-        },
-      ]),
-      Contact.find({ user: req.userId, direction: 'i_lent', isSettled: false }),
-      Contact.find({ user: req.userId, direction: 'i_borrowed', isSettled: false }),
-      Goal.find({ user: req.userId, isCompleted: false }),
+      Contact.find({ user: req.userId, direction: 'i_lent', isSettled: false })
+        .select('direction entries')
+        .lean(),
+      Contact.find({ user: req.userId, direction: 'i_borrowed', isSettled: false })
+        .select('direction entries')
+        .lean(),
+      Goal.find({ user: req.userId, isCompleted: false }).lean(),
     ]);
+
+    const facet = txFacet[0] || {};
+    const current = facet.current || [];
+    const previous = facet.previous || [];
+    const categoryBreakdown = facet.categoryBreakdown || [];
 
     const income = current.find((r) => r._id === 'income')?.total || 0;
     const expenses = current.find((r) => r._id === 'expense')?.total || 0;
@@ -78,28 +100,11 @@ router.get('/summary', async (req, res, next) => {
     const prevSaved = prevIncome - prevExpenses;
     const savingsRate = income > 0 ? Math.round((saved / income) * 100) : 0;
 
-    const categoryBreakdown = await Transaction.aggregate([
-      {
-        $match: {
-          user: userId,
-          type: 'expense',
-          date: { $gte: start, $lt: end },
-        },
-      },
-      {
-        $group: {
-          _id: '$category',
-          total: { $sum: '$amount' },
-        },
-      },
-      { $sort: { total: -1 } },
-    ]);
-
     const lang = req.query.lang === 'ur' ? 'ur' : 'en'; // roman uses English quotes & tips
     const dailyQuote = getDailyQuote(lang);
 
-    const totalLent = lentContacts.reduce((sum, c) => sum + (c.balance || 0), 0);
-    const totalBorrowed = borrowedContacts.reduce((sum, c) => sum + (c.balance || 0), 0);
+    const totalLent = lentContacts.reduce((sum, c) => sum + contactBalance(c), 0);
+    const totalBorrowed = borrowedContacts.reduce((sum, c) => sum + contactBalance(c), 0);
 
     const topCategory = categoryBreakdown[0];
     const savingsOpportunity = topCategory

@@ -32,7 +32,7 @@
   },
   "backup": {
     "title": "Google Drive Backup",
-    "subtitle": "Save a private copy of your data to your Google Drive",
+    "subtitle": "Backup file stays only in your Google Drive — not on our servers",
     "enable": "Auto backup",
     "frequency": "Backup frequency",
     "daily": "Daily",

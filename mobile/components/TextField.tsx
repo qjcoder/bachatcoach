@@ -1,4 +1,5 @@
-import { View, TextInput, StyleSheet, Platform, type TextInputProps } from 'react-native';
+import { useState } from 'react';
+import { View, TextInput, StyleSheet, Platform, Pressable, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { useAppType } from '@/components/AppText';
@@ -9,30 +10,44 @@ import { getFontFamily } from '@/constants/typography';
 type TextFieldProps = TextInputProps & {
   label?: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  trailingIcon?: keyof typeof Ionicons.glyphMap;
+  onTrailingPress?: () => void;
 };
 
-export function TextField({ label, icon, style, ...props }: TextFieldProps) {
+export function TextField({ label, icon, trailingIcon, onTrailingPress, style, secureTextEntry, ...props }: TextFieldProps) {
   const { lang } = useAppType();
   const isRTL = useIsRTL();
+  const [focused, setFocused] = useState(false);
+  const [hidden, setHidden] = useState(secureTextEntry ?? false);
+
+  const borderColor = focused ? Brand.primary : Brand.border;
+  const iconColor = focused ? Brand.primary : Brand.textMuted;
+  const bgColor = focused ? '#F0FDF4' : '#F8FAFC';
 
   return (
     <View style={styles.wrap}>
-      {label ? <AppText variant="label" style={styles.label}>{label}</AppText> : null}
-      <View style={[styles.inputRow, isRTL && styles.inputRowRTL]}>
+      {label ? (
+        <AppText variant="label" style={[styles.label, focused && styles.labelFocused]}>
+          {label}
+        </AppText>
+      ) : null}
+
+      <View style={[styles.inputRow, isRTL && styles.inputRowRTL, { borderColor, backgroundColor: bgColor }]}>
         {icon ? (
           <Ionicons
             name={icon}
-            size={20}
-            color={Brand.textMuted}
+            size={19}
+            color={iconColor}
             style={isRTL ? styles.iconRTL : styles.iconLTR}
           />
         ) : null}
+
         <TextInput
           style={[
             styles.input,
             {
               fontFamily: getFontFamily(lang, 400),
-              fontSize: 16,
+              fontSize: 15.5,
               writingDirection: isRTL ? 'rtl' : 'ltr',
               textAlign: 'left',
             },
@@ -40,39 +55,50 @@ export function TextField({ label, icon, style, ...props }: TextFieldProps) {
           ]}
           placeholderTextColor="#94A3B8"
           textAlignVertical="center"
+          secureTextEntry={hidden}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           {...props}
         />
+
+        {secureTextEntry ? (
+          <Pressable onPress={() => setHidden(h => !h)} style={styles.eyeBtn} hitSlop={10}>
+            <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={Brand.textMuted} />
+          </Pressable>
+        ) : trailingIcon ? (
+          <Pressable onPress={onTrailingPress} style={styles.eyeBtn} hitSlop={10}>
+            <Ionicons name={trailingIcon} size={20} color={Brand.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: 16 },
-  label: { marginBottom: 8, color: Brand.text },
+  wrap: { marginBottom: 14 },
+  label: { marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
+  labelFocused: { color: Brand.primary },
+
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: Brand.border,
+    borderWidth: 1.5,
     borderRadius: Radius.md,
     minHeight: 52,
     paddingHorizontal: 14,
+    overflow: 'hidden',
   },
-  inputRowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  iconLTR: {
-    marginRight: 10,
-  },
-  iconRTL: {
-    marginLeft: 10,
-  },
+  inputRowRTL: { flexDirection: 'row-reverse' },
+
+  iconLTR: { marginRight: 10 },
+  iconRTL: { marginLeft: 10 },
+
+  eyeBtn: { marginLeft: 8 },
+
   input: {
     flex: 1,
     color: Brand.text,
-    // Avoid large lineHeight + padding — on iOS that pushes text to the bottom.
     ...(Platform.OS === 'ios'
       ? { paddingVertical: 14, lineHeight: 20 }
       : { paddingVertical: 12, textAlignVertical: 'center' as const }),

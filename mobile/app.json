@@ -5,7 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bachatcoach",
+    "scheme": [
+      "bachatcoach",
+      "com.googleusercontent.apps.966711411072-gdj8p0120sqshgobnkvnbkk02vbh0bb5"
+    ],
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,

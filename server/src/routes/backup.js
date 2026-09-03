@@ -17,6 +17,8 @@ function userObjectId(req) {
 
 router.get('/export', async (req, res, next) => {
   try {
+    // Builds a JSON snapshot for the *client* to upload to the user's Google Drive.
+    // This payload is never written back to MongoDB as a backup document.
     const userId = userObjectId(req);
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });

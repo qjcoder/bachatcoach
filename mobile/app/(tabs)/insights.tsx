@@ -43,18 +43,24 @@ export default function InsightsScreen() {
   const [report, setReport] = useState<MonthlyReportData | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const load = async () => {
-    const { data: res } = await api.get('/dashboard/summary', { params: { lang: i18n.language } });
+  const load = async (fresh = false) => {
+    const { data: res } = await api.get('/dashboard/summary', {
+      params: { lang: i18n.language },
+      headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
+    });
     setData(res);
   };
 
-  const loadReport = async (year: number) => {
-    const { data: res } = await api.get('/dashboard/monthly-report', { params: { year } });
+  const loadReport = async (year: number, fresh = false) => {
+    const { data: res } = await api.get('/dashboard/monthly-report', {
+      params: { year },
+      headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
+    });
     setReport(res);
   };
 
-  const loadAll = async (year: number) => {
-    await Promise.all([load(), loadReport(year)]);
+  const loadAll = async (year: number, fresh = false) => {
+    await Promise.all([load(fresh), loadReport(year, fresh)]);
   };
 
   useFocusEffect(
@@ -111,7 +117,7 @@ export default function InsightsScreen() {
           refreshing={refreshing}
           onRefresh={async () => {
             setRefreshing(true);
-            await loadAll(reportYear);
+            await loadAll(reportYear, true);
             setRefreshing(false);
           }}
           tintColor={Brand.primary}
