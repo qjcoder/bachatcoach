@@ -20,6 +20,13 @@ export function formatMoney(amount: number, currencyCode = 'PKR', locale?: strin
   }
 }
 
+/** Number only (no currency code) — use in tight table cells. */
+export function formatAmount(amount: number, locale?: string) {
+  const lang = normalizeLanguage(locale);
+  const intlLocale = lang === 'ur' ? 'ur-PK' : 'en-US';
+  return new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(amount);
+}
+
 /** @deprecated Use formatMoney */
 export function formatPKR(amount: number, locale?: string) {
   return formatMoney(amount, 'PKR', locale);

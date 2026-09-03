@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter, useSegments } from 'expo-router';
-import api from '@/lib/api';
+import api, { clearApiCache, prefetchCriticalData, setAuthToken } from '@/lib/api';
 
 import { setStoredLanguage } from '@/i18n';
-import { type AppLanguage } from '@/lib/language';
+import { type AppLanguage, normalizeLanguage } from '@/lib/language';
 import { getDefaultCurrencyForLanguage } from '@/constants/languages';
 import { clearGoogleTokens } from '@/lib/googleAuth';
+import { clearLockSettings } from '@/lib/lock';
 import type { BackupFrequency } from '@/lib/googleDriveBackup';
 
 type User = {
@@ -62,21 +63,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
 
+  const applyAccountLanguage = async (language?: string) => {
+    if (!language) return;
+    await setStoredLanguage(normalizeLanguage(language));
+  };
+
+  /** Clear only device-local session data. Server account data is never deleted here. */
+  const clearLocalSession = async () => {
+    clearApiCache();
+    setAuthToken(null);
+    await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('user');
+    await clearGoogleTokens();
+    await clearLockSettings();
+    setUser(null);
+  };
+
   useEffect(() => {
     (async () => {
       try {
         const token = await SecureStore.getItemAsync('token');
         const userJson = await SecureStore.getItemAsync('user');
         if (token && userJson) {
+          setAuthToken(token);
           const userData = JSON.parse(userJson) as User;
           setUser(userData);
           try {
             const { data } = await api.get('/auth/me');
             const fresh = { ...userData, ...data.user } as User;
             await SecureStore.setItemAsync('user', JSON.stringify(fresh));
+            // Keep language in sync with the cloud account across devices.
+            await applyAccountLanguage(fresh.language);
             setUser(fresh);
+            void prefetchCriticalData(fresh.language || 'en');
           } catch {
             // Keep cached user if refresh fails (offline, etc.)
+            void prefetchCriticalData(userData.language || 'en');
           }
         }
       } finally {
@@ -98,12 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loading, segments, router]);
 
   const persistSession = async (token: string, userData: User) => {
+    clearApiCache();
+    setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('user', JSON.stringify(userData));
-    if (userData.language) {
-      await setStoredLanguage(userData.language);
-    }
+    await applyAccountLanguage(userData.language);
     setUser(userData);
+    void prefetchCriticalData(userData.language || 'en');
   };
 
   const login = async (email: string, password: string) => {
@@ -165,6 +188,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const updated = { ...user, ...data.user };
     await SecureStore.setItemAsync('user', JSON.stringify(updated));
+    if (patch.language || data.user?.language) {
+      await applyAccountLanguage(updated.language);
+    }
     setUser(updated);
   };
 
@@ -175,29 +201,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = async () => {
     const { data } = await api.get('/auth/me');
     if (!user) {
+      await applyAccountLanguage(data.user?.language);
       setUser(data.user);
       await SecureStore.setItemAsync('user', JSON.stringify(data.user));
       return;
     }
     const updated = { ...user, ...data.user };
+    await applyAccountLanguage(updated.language);
     await SecureStore.setItemAsync('user', JSON.stringify(updated));
     setUser(updated);
   };
 
   const deleteAccount = async () => {
+    // Explicit account wipe on the server. Uninstalling the app does NOT do this.
     await api.delete('/auth/account');
-    await SecureStore.deleteItemAsync('token');
-    await SecureStore.deleteItemAsync('user');
-    await clearGoogleTokens();
-    setUser(null);
+    await clearLocalSession();
     router.replace('/(auth)/login');
   };
 
   const logout = async () => {
-    await SecureStore.deleteItemAsync('token');
-    await SecureStore.deleteItemAsync('user');
-    await clearGoogleTokens();
-    setUser(null);
+    // Leaves all server data intact for other devices / reinstall.
+    await clearLocalSession();
     router.replace('/(auth)/login');
   };
 

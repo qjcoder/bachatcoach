@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": [
+      "com.googleusercontent.apps.966711411072-vlfkub8d4ipulb0ofsgojmc48nm7edmf",
       "com.googleusercontent.apps.966711411072-gdj8p0120sqshgobnkvnbkk02vbh0bb5",
       "bachatcoach"
     ],
@@ -17,7 +18,7 @@
     "android": {
       "package": "com.bachatcoach.app",
       "adaptiveIcon": {
-        "backgroundColor": "#1E3A8A",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -34,9 +35,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0B1020",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 180,
+          "backgroundColor": "#000000",
+          "image": "./assets/images/splash-logo.png",
+          "imageWidth": 320,
           "resizeMode": "contain"
         }
       ],

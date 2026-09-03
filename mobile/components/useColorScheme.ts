@@ -1,4 +1,5 @@
 import { useTheme, type ResolvedTheme } from '@/context/ThemeContext';
+import Colors from '@/constants/Colors';
 
 export const useColorScheme = (): ResolvedTheme => {
   try {
@@ -8,3 +9,7 @@ export const useColorScheme = (): ResolvedTheme => {
     return 'light';
   }
 };
+
+export function useColors() {
+  return Colors[useColorScheme()];
+}

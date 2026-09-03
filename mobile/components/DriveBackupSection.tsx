@@ -12,7 +12,7 @@ import { SettingsMenuRow } from '@/components/SettingsMenuRow';
 import { Brand, Radius } from '@/constants/theme';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
-import { getGoogleAccessToken, isGoogleAuthConfigured } from '@/lib/googleAuth';
+import { ensureGoogleAccessToken, isGoogleAuthConfigured } from '@/lib/googleAuth';
 import {
   downloadBackupFromDrive,
   isBackupDue,
@@ -47,7 +47,7 @@ export function DriveBackupSection({ rowTheme }: Props) {
 
   const runBackup = useCallback(
     async (silent = false) => {
-      const token = await getGoogleAccessToken();
+      const token = await ensureGoogleAccessToken();
       if (!token) {
         if (!silent) {
           showAlert({ title: t('backup.title'), message: t('backup.needGoogle'), tone: 'warning' });
@@ -125,7 +125,7 @@ export function DriveBackupSection({ rowTheme }: Props) {
   };
 
   const toggleEnabled = async (value: boolean) => {
-    if (value && !(await getGoogleAccessToken())) {
+    if (value && !(await ensureGoogleAccessToken())) {
       showAlert({ title: t('backup.title'), message: t('backup.needGoogle'), tone: 'warning' });
       return;
     }

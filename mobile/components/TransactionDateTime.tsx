@@ -20,7 +20,8 @@ type TransactionDateTimeProps = {
 
 export function TransactionDateTime({ value, onChange, accent = Brand.primary }: TransactionDateTimeProps) {
   const { t, i18n } = useTranslation();
-  const colors = Colors[useColorScheme() ?? 'light'];
+  const scheme = useColorScheme() ?? 'light';
+  const colors = Colors[scheme];
   const { headingBlock } = useDirection();
   const isRTL = useIsRTL();
   const [showDate, setShowDate] = useState(false);
@@ -74,7 +75,7 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
     if (Platform.OS !== 'ios') return null;
 
     return (
-      <RTLRow gap={10} style={styles.pickerActions}>
+      <RTLRow gap={10} style={[styles.pickerActions, { borderTopColor: colors.border }]}>
         <Pressable
           onPress={closePickers}
           style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -139,7 +140,7 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
       </RTLRow>
 
       {showDate ? (
-        <View style={[styles.pickerPanel, { borderColor: colors.border }]}>
+        <View style={[styles.pickerPanel, { borderColor: colors.border, backgroundColor: colors.field }]}>
           <View style={styles.pickerWrap}>
             <DateTimePicker
               value={value}
@@ -147,6 +148,7 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={onDateChange}
               maximumDate={new Date()}
+              themeVariant={scheme}
             />
           </View>
           {renderPickerActions('date')}
@@ -154,13 +156,14 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
       ) : null}
 
       {showTime ? (
-        <View style={[styles.pickerPanel, { borderColor: colors.border }]}>
+        <View style={[styles.pickerPanel, { borderColor: colors.border, backgroundColor: colors.field }]}>
           <View style={styles.pickerWrap}>
             <DateTimePicker
               value={value}
               mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={onTimeChange}
+              themeVariant={scheme}
             />
           </View>
           {renderPickerActions('time')}
@@ -189,7 +192,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     overflow: 'hidden',
-    backgroundColor: '#F8FAFC',
   },
   pickerWrap: {
     overflow: 'hidden',
@@ -197,7 +199,6 @@ const styles = StyleSheet.create({
   pickerActions: {
     padding: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
   },
   actionBtn: {
     flex: 1,

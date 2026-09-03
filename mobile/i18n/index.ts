@@ -1,6 +1,5 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureNativeDirection } from '@/lib/rtl';
 import { type AppLanguage, normalizeLanguage } from '@/lib/language';
@@ -22,10 +21,6 @@ export const getStoredLanguage = async (): Promise<AppLanguage> => {
   const stored = await AsyncStorage.getItem(LANGUAGE_KEY);
   if (stored && APP_LANGUAGES.includes(stored as AppLanguage)) {
     return stored as AppLanguage;
-  }
-  const deviceLang = Localization.getLocales()[0]?.languageCode;
-  if (deviceLang && APP_LANGUAGES.includes(deviceLang as AppLanguage)) {
-    return deviceLang as AppLanguage;
   }
   return 'en';
 };

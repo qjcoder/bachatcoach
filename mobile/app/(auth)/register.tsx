@@ -61,7 +61,6 @@ export default function RegisterScreen() {
   return (
     <AuthScreen
       title={t('auth.register')}
-      subtitle={t('common.tagline')}
       footer={
         <View style={styles.footerRow}>
           <AppText variant="body" color="rgba(255,255,255,0.75)">{t('auth.hasAccount')} </AppText>

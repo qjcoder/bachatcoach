@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Brand, Radius, Shadow } from '@/constants/theme';
+import { useColors } from '@/components/useColorScheme';
 
 export type AppDialogTone = 'success' | 'error' | 'info' | 'warning';
 
@@ -44,6 +45,7 @@ export function AppDialog({
   onConfirm,
   onClose,
 }: AppDialogProps) {
+  const colors = useColors();
   const color = TONE_COLOR[tone];
   const hasCancel = Boolean(cancelLabel);
   const handleConfirm = () => {
@@ -58,15 +60,17 @@ export function AppDialog({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" />
-        <View style={styles.card} accessibilityRole="alert">
+        <View
+          style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+          accessibilityRole="alert">
           <View style={[styles.iconWrap, { backgroundColor: `${color}18` }]}>
             <Ionicons name={TONE_ICON[tone]} size={28} color={color} />
           </View>
-          <AppText variant="h2" color={Brand.text} style={styles.title}>
+          <AppText variant="h2" color={colors.text} style={styles.title}>
             {title}
           </AppText>
           {message ? (
-            <AppText variant="body" color={Brand.textMuted} style={styles.message}>
+            <AppText variant="body" color={colors.muted} style={styles.message}>
               {message}
             </AppText>
           ) : (
@@ -108,7 +112,6 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: Brand.card,
     borderRadius: Radius.xl,
     paddingHorizontal: 22,
     paddingTop: 26,
@@ -116,7 +119,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...Shadow.elevated,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Brand.border,
   },
   iconWrap: {
     width: 56,

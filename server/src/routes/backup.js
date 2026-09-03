@@ -5,6 +5,7 @@ import User, { BACKUP_FREQUENCIES } from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Contact from '../models/Contact.js';
 import Goal from '../models/Goal.js';
+import { phoneKey } from '../lib/phone.js';
 
 const router = express.Router();
 router.use(auth);
@@ -49,7 +50,10 @@ router.get('/export', async (req, res, next) => {
         backupEnabled: user.backupEnabled,
         backupFrequency: user.backupFrequency,
       },
-      transactions: transactions.map(strip),
+      transactions: transactions.map((t) => ({
+        ...strip(t),
+        receiptImage: typeof t.receiptImage === 'string' && t.receiptImage.startsWith('drive:') ? t.receiptImage : '',
+      })),
       contacts: contacts.map((c) => {
         const base = strip(c);
         return {
@@ -93,7 +97,8 @@ router.post('/restore', async (req, res, next) => {
       note: t.note || '',
       customCategory: t.customCategory || '',
       date: t.date ? new Date(t.date) : new Date(),
-      receiptImage: t.receiptImage || '',
+      receiptImage:
+        typeof t.receiptImage === 'string' && t.receiptImage.startsWith('drive:') ? t.receiptImage : '',
     }));
     if (txs.length) await Transaction.insertMany(txs);
 
@@ -102,6 +107,7 @@ router.post('/restore', async (req, res, next) => {
       name: c.name,
       nameUr: c.nameUr || '',
       phone: c.phone || '',
+      phoneKey: phoneKey(c.phone),
       direction: c.direction,
       entries: (c.entries || []).map((e) => ({
         type: e.type,

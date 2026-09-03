@@ -100,6 +100,10 @@ function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
                 }}
               />
               <Stack.Screen
+                name="loan-ledger"
+                options={{ title: t('loans.ledgerTitle'), ...headerOptions }}
+              />
+              <Stack.Screen
                 name="goals"
                 options={{ title: t('goals.title'), ...headerOptions }}
               />

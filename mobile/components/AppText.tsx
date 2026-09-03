@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useIsRTL } from '@/hooks/useIsRTL';
 import { normalizeLanguage } from '@/lib/language';
 import { type AppLanguage, type TypeVariantName, typeStyle } from '@/constants/typography';
+import { useLayoutScale } from '@/lib/layout';
+import { useColors } from '@/components/useColorScheme';
 
 const RTL_FULL_WIDTH_VARIANTS = new Set<TypeVariantName>([
   'display',
@@ -38,6 +40,8 @@ export function AppText({
 }: AppTextProps) {
   const { i18n } = useTranslation();
   const isRTL = useIsRTL();
+  const { factor } = useLayoutScale();
+  const colors = useColors();
   const lang: AppLanguage = normalizeLanguage(i18n.language);
   // `textAlign: 'left'` is logical start — with writingDirection rtl it aligns to the right.
   const textAlign = align ?? 'left';
@@ -47,10 +51,10 @@ export function AppText({
   return (
     <Text
       style={[
-        typeStyle(lang, variant),
+        typeStyle(lang, variant, factor),
         { textAlign, writingDirection: isRTL ? 'rtl' : 'ltr' },
         rtlFullWidth ? styles.rtlFullWidth : isRTL && align !== 'center' ? styles.rtlStretch : null,
-        color ? { color } : muted ? styles.muted : null,
+        color ? { color } : muted ? { color: colors.muted } : { color: colors.text },
         style,
       ]}
       {...props}>
@@ -62,16 +66,16 @@ export function AppText({
 export function useAppType() {
   const { i18n } = useTranslation();
   const isRTL = useIsRTL();
+  const { factor } = useLayoutScale();
   const lang: AppLanguage = normalizeLanguage(i18n.language);
   return {
     lang,
     isRTL,
-    type: (variant: TypeVariantName) => typeStyle(lang, variant),
+    type: (variant: TypeVariantName) => typeStyle(lang, variant, factor),
   };
 }
 
 const styles = StyleSheet.create({
-  muted: { opacity: 0.72 },
   rtlStretch: { alignSelf: 'stretch', textAlign: 'left' },
   rtlFullWidth: { alignSelf: 'stretch', width: '100%', textAlign: 'left' },
 });

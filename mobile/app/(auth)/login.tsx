@@ -43,8 +43,6 @@ export default function LoginScreen() {
 
   return (
     <AuthScreen
-      title={t('auth.welcome')}
-      subtitle={t('auth.subtitle')}
       footer={
         <View style={styles.footerRow}>
           <AppText variant="body" color="rgba(255,255,255,0.75)">{t('auth.noAccount')} </AppText>

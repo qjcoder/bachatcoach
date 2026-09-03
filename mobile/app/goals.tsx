@@ -150,7 +150,11 @@ export default function GoalsScreen() {
             <Pressable
               key={iconKey}
               onPress={() => setSelectedIcon(iconKey)}
-              style={[styles.iconChip, selectedIcon === iconKey && styles.iconChipActive]}>
+              style={[
+                styles.iconChip,
+                { backgroundColor: colors.field },
+                selectedIcon === iconKey && styles.iconChipActive,
+              ]}>
               <GoalIconEmoji icon={iconKey} />
             </Pressable>
           ))}
@@ -205,7 +209,7 @@ const styles = StyleSheet.create({
     backgroundColor: `${Brand.primary}10`,
   },
   iconRow: { flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  iconChip: { padding: 10, borderRadius: Radius.sm, backgroundColor: '#E2E8F0' },
+  iconChip: { padding: 10, borderRadius: Radius.sm },
   iconChipActive: { backgroundColor: `${Brand.primary}25`, borderWidth: 2, borderColor: Brand.primary },
   modalActions: { marginTop: 8 },
 });

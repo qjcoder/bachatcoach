@@ -33,6 +33,22 @@ BachatCoach uses Google OAuth for **Sign-In / Sign-Up** and **Google Drive** bac
    - Or your app scheme callback if using custom schemes: `bachatcoach://`
 4. Copy the **Client ID** → `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` and include it in server `GOOGLE_CLIENT_IDS`.
 
+### Android client
+
+1. Application type: **Android**
+2. Package name: `com.bachatcoach.app`
+3. SHA-1 certificate fingerprint (debug / local release signing):
+
+```
+5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25
+```
+
+Without this SHA-1, Google shows **Error 400: invalid_request**.
+
+4. Copy the **Client ID** → `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` and include it in server `GOOGLE_CLIENT_IDS`.
+
+While the consent screen is in **Testing**, also add each Gmail under **Audience → Test users**.
+
 ### iOS client
 
 1. Application type: **iOS**

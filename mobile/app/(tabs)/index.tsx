@@ -67,7 +67,9 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      load().catch(() => setSummary(null));
+      load().catch(() => {
+        /* keep last summary — never flash empty on a transient error */
+      });
     }, [i18n.language])
   );
 

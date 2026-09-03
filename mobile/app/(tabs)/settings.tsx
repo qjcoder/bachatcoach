@@ -21,16 +21,26 @@ import { type AppLanguage, normalizeLanguage } from '@/lib/language';
 import { filterLanguages, getDefaultCurrencyForLanguage, getLanguage, getLanguageBadge } from '@/constants/languages';
 import { RTLRow } from '@/components/RTLRow';
 import {
-  hasPin,
+  encodePattern,
+  getLockMethod,
+  getStoredPinLength,
+  hasLockSecret,
   isBiometricEnabled,
   isLockEnabled,
+  MAX_PIN_LENGTH,
+  MIN_PIN_LENGTH,
+  savePatternLock,
   savePin,
   setBiometricEnabled,
   setLockEnabled,
+  type LockMethod,
 } from '@/lib/lock';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { BottomSheet } from '@/components/BottomSheet';
+import { PinBoxes } from '@/components/PinBoxes';
+import { PatternLock } from '@/components/PatternLock';
+import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { TextField } from '@/components/TextField';
 import { SettingsMenuRow } from '@/components/SettingsMenuRow';
 import Colors from '@/constants/Colors';
@@ -66,8 +76,15 @@ export default function SettingsScreen() {
   const colors = Colors[scheme];
 
   const [lockOn, setLockOn] = useState(false);
+  const [lockMethod, setLockMethod] = useState<LockMethod>('pin');
   const [bioOn, setBioOn] = useState(false);
   const [pinModal, setPinModal] = useState(false);
+  const [setupMethod, setSetupMethod] = useState<LockMethod>('pin');
+  const [patternStage, setPatternStage] = useState<'draw' | 'confirm'>('draw');
+  const [patternFirst, setPatternFirst] = useState<number[] | null>(null);
+  const [patternReady, setPatternReady] = useState(false);
+  const [patternStatus, setPatternStatus] = useState<'idle' | 'error'>('idle');
+  const [patternKey, setPatternKey] = useState(0);
   const [languageModal, setLanguageModal] = useState(false);
   const [languageSearch, setLanguageSearch] = useState('');
   const [savingLanguage, setSavingLanguage] = useState(false);
@@ -78,9 +95,11 @@ export default function SettingsScreen() {
   const [savingPhoto, setSavingPhoto] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [pinLength, setPinLength] = useState<4 | 6>(4);
 
   const loadSecurity = useCallback(async () => {
     setLockOn(await isLockEnabled());
+    setLockMethod(await getLockMethod());
     setBioOn(await isBiometricEnabled());
   }, []);
   useFocusEffect(useCallback(() => { loadSecurity(); }, [loadSecurity]));
@@ -112,17 +131,42 @@ export default function SettingsScreen() {
     } finally { setSavingLanguage(false); }
   };
 
+  const resetLockForm = (method: LockMethod) => {
+    setSetupMethod(method);
+    setPatternStage('draw');
+    setPatternFirst(null);
+    setPatternReady(false);
+    setPatternStatus('idle');
+    setPatternKey((k) => k + 1);
+    setNewPin('');
+    setConfirmPin('');
+  };
+
+  const openPinModal = async () => {
+    const stored = await getStoredPinLength();
+    const next = stored === MAX_PIN_LENGTH ? MAX_PIN_LENGTH : MIN_PIN_LENGTH;
+    setPinLength(next);
+    const method = await getLockMethod();
+    resetLockForm(method);
+    setPinModal(true);
+  };
+
   const toggleLock = async (value: boolean) => {
     if (value) {
-      if (!(await hasPin())) { setPinModal(true); return; }
+      if (!(await hasLockSecret())) { await openPinModal(); return; }
       await setLockEnabled(true); setLockOn(true); await refreshLockSettings();
     } else {
       await setLockEnabled(false); setLockOn(false); setBioOn(false); await refreshLockSettings();
     }
   };
 
+  const closeLockModal = () => {
+    setPinModal(false);
+    resetLockForm('pin');
+  };
+
   const saveNewPin = async () => {
-    if (newPin.length < 4) {
+    if (newPin.length !== pinLength || confirmPin.length !== pinLength) {
       showAlert({ title: t('lock.pinTooShort'), tone: 'error' });
       return;
     }
@@ -130,9 +174,42 @@ export default function SettingsScreen() {
       showAlert({ title: t('lock.pinMismatch'), tone: 'error' });
       return;
     }
-    await savePin(newPin); setPinModal(false); setNewPin(''); setConfirmPin(''); setLockOn(true);
+    if (setupMethod === 'pattern') {
+      if (!patternReady || !patternFirst) {
+        showAlert({ title: t('lock.patternTooShort'), tone: 'error' });
+        return;
+      }
+      await savePatternLock(encodePattern(patternFirst), newPin);
+    } else {
+      await savePin(newPin);
+    }
+    closeLockModal();
+    setLockOn(true);
+    await loadSecurity();
     await refreshLockSettings();
-    showAlert({ title: t('lock.pinSet'), tone: 'success' });
+    showAlert({ title: setupMethod === 'pattern' ? t('lock.patternSet') : t('lock.pinSet'), tone: 'success' });
+  };
+
+  const onSetupPattern = (nodes: number[]) => {
+    if (patternStage === 'draw') {
+      setPatternFirst(nodes);
+      setPatternStage('confirm');
+      setPatternKey((k) => k + 1);
+      return;
+    }
+    if (patternFirst && encodePattern(patternFirst) === encodePattern(nodes)) {
+      setPatternReady(true);
+      setPatternStatus('idle');
+      return;
+    }
+    setPatternStatus('error');
+    showAlert({ title: t('lock.patternMismatch'), tone: 'error' });
+    setTimeout(() => {
+      setPatternStage('draw');
+      setPatternFirst(null);
+      setPatternStatus('idle');
+      setPatternKey((k) => k + 1);
+    }, 450);
   };
 
   const toggleBiometric = async (value: boolean) => {
@@ -291,9 +368,10 @@ export default function SettingsScreen() {
         {lockOn ? (
           <SettingsMenuRow
             icon="key-outline"
-            label={t('lock.changePin')}
+            label={t('lock.changeLock')}
+            value={lockMethod === 'pattern' ? t('lock.methodPattern') : t('lock.methodPin')}
             actionLabel={t('common.change')}
-            onPress={() => { setNewPin(''); setConfirmPin(''); setPinModal(true); }}
+            onPress={() => { void openPinModal(); }}
             {...rowTheme}
           />
         ) : null}
@@ -367,13 +445,71 @@ export default function SettingsScreen() {
         ))}
       </BottomSheet>
 
-      <BottomSheet visible={pinModal} title={t('lock.setPin')} onClose={() => setPinModal(false)}>
-        <TextField label={t('lock.newPin')} icon="key-outline" value={newPin} onChangeText={setNewPin} keyboardType="number-pad" secureTextEntry maxLength={6} />
-        <TextField label={t('lock.confirmPin')} icon="key-outline" value={confirmPin} onChangeText={setConfirmPin} keyboardType="number-pad" secureTextEntry maxLength={6} />
-        <RTLRow style={{ marginTop: 8 }} gap={10}>
-          <Button title={t('common.cancel')} onPress={() => setPinModal(false)} variant="outline" style={{ flex: 1 }} />
-          <Button title={t('common.save')} onPress={saveNewPin} style={{ flex: 1 }} />
-        </RTLRow>
+      <BottomSheet visible={pinModal} title={t('lock.setLock')} onClose={closeLockModal}>
+          <AppText variant="bodySmall" color={colors.muted} style={styles.pinHint}>
+            {t('lock.lockMethod')}
+          </AppText>
+          <SegmentedTabs
+            tabs={[
+              { key: 'pin', label: t('lock.methodPin') },
+              { key: 'pattern', label: t('lock.methodPattern') },
+            ]}
+            active={setupMethod}
+            onChange={(key) => resetLockForm(key)}
+          />
+
+          {setupMethod === 'pattern' && !patternReady ? (
+            <>
+              <AppText variant="bodySmall" color={colors.muted} style={styles.pinFieldLabel}>
+                {patternStage === 'draw' ? t('lock.drawPattern') : t('lock.redrawPattern')}
+              </AppText>
+              <PatternLock key={patternKey} onComplete={onSetupPattern} status={patternStatus} />
+              <AppText variant="caption" color={colors.muted} style={styles.pinHint}>
+                {t('lock.patternTooShort')}
+              </AppText>
+            </>
+          ) : null}
+
+          {setupMethod === 'pattern' && patternReady ? (
+            <AppText variant="bodySmall" color={Brand.primary} style={styles.pinFieldLabel}>
+              {t('lock.backupPinHint')}
+            </AppText>
+          ) : null}
+
+          {setupMethod === 'pin' || patternReady ? (
+            <>
+              <AppText variant="bodySmall" color={colors.muted} style={styles.pinHint}>
+                {setupMethod === 'pattern' ? t('lock.backupPin') : t('lock.chooseLength')}
+              </AppText>
+              <SegmentedTabs
+                tabs={[
+                  { key: String(MIN_PIN_LENGTH), label: t('lock.digits', { count: MIN_PIN_LENGTH }) },
+                  { key: String(MAX_PIN_LENGTH), label: t('lock.digits', { count: MAX_PIN_LENGTH }) },
+                ]}
+                active={String(pinLength)}
+                onChange={(key) => {
+                  setPinLength(Number(key) as 4 | 6);
+                  setNewPin('');
+                  setConfirmPin('');
+                }}
+              />
+              <AppText variant="bodySmall" color={colors.muted} style={styles.pinFieldLabel}>
+                {setupMethod === 'pattern' ? t('lock.backupPin') : t('lock.newPin')}
+              </AppText>
+              <PinBoxes value={newPin} onChange={setNewPin} length={pinLength} />
+              <AppText variant="bodySmall" color={colors.muted} style={styles.pinFieldLabel}>
+                {t('lock.confirmPin')}
+              </AppText>
+              <PinBoxes value={confirmPin} onChange={setConfirmPin} length={pinLength} autoFocus={false} />
+            </>
+          ) : null}
+
+          <RTLRow style={{ marginTop: 12 }} gap={10}>
+            <Button title={t('common.cancel')} onPress={closeLockModal} variant="outline" style={{ flex: 1 }} />
+            {setupMethod === 'pin' || patternReady ? (
+              <Button title={t('common.save')} onPress={saveNewPin} style={{ flex: 1 }} />
+            ) : null}
+          </RTLRow>
       </BottomSheet>
 
       <BottomSheet visible={currencyModal} title={t('settings.selectCurrency')} onClose={() => { setCurrencyModal(false); setCurrencySearch(''); }}>
@@ -384,7 +520,14 @@ export default function SettingsScreen() {
             const selected = item.code === user?.currency;
             const name = currentLang === 'ur' ? item.nameUr : item.name;
             return (
-              <Pressable onPress={() => selectCurrency(item.code)} disabled={savingCurrency} style={[styles.pickerRow, selected && styles.pickerRowSelected]}>
+          <Pressable
+            onPress={() => selectCurrency(item.code)}
+            disabled={savingCurrency}
+            style={[
+              styles.pickerRow,
+              { borderBottomColor: colors.border },
+              selected && styles.pickerRowSelected,
+            ]}>
                 <RTLRow gap={12}>
                   <View style={styles.pickerBadge}><AppText variant="bodySemibold" color={Brand.primary}>{item.symbol}</AppText></View>
                   <View style={{ flex: 1 }}>
@@ -406,7 +549,14 @@ export default function SettingsScreen() {
           renderItem={({ item }) => {
             const selected = item.code === currentLang;
             return (
-              <Pressable onPress={() => changeLanguage(item.code as AppLanguage)} disabled={savingLanguage} style={[styles.pickerRow, selected && styles.pickerRowSelected]}>
+          <Pressable
+            onPress={() => changeLanguage(item.code as AppLanguage)}
+            disabled={savingLanguage}
+            style={[
+              styles.pickerRow,
+              { borderBottomColor: colors.border },
+              selected && styles.pickerRowSelected,
+            ]}>
                 <RTLRow gap={12}>
                   <View style={styles.pickerBadge}>
                     <AppText variant="captionBold" color={Brand.primary} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ textAlign: 'center', paddingHorizontal: 2 }}>
@@ -450,6 +600,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
   },
+  pinHint: { marginBottom: 8 },
+  pinFieldLabel: { marginTop: 14, marginBottom: 8 },
   deleteLink: {
     alignSelf: 'center',
     paddingVertical: 10,
@@ -486,7 +638,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
     borderRadius: Radius.sm,
   },
   pickerRowSelected: { backgroundColor: `${Brand.primary}10` },

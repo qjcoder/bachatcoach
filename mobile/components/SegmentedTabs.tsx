@@ -1,5 +1,6 @@
 import { View, Pressable, StyleSheet } from 'react-native';
 import { AppText } from '@/components/AppText';
+import { useColors } from '@/components/useColorScheme';
 import { Brand, Radius } from '@/constants/theme';
 
 type SegmentedTabsProps<T extends string> = {
@@ -9,8 +10,10 @@ type SegmentedTabsProps<T extends string> = {
 };
 
 export function SegmentedTabs<T extends string>({ tabs, active, onChange }: SegmentedTabsProps<T>) {
+  const colors = useColors();
+
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.field }]}>
       {tabs.map((tab) => {
         const isActive = tab.key === active;
         return (
@@ -20,7 +23,7 @@ export function SegmentedTabs<T extends string>({ tabs, active, onChange }: Segm
             style={[styles.tab, isActive && styles.tabActive]}>
             <AppText
               variant="bodySmallBold"
-              color={isActive ? '#FFFFFF' : Brand.textMuted}
+              color={isActive ? '#FFFFFF' : colors.muted}
               align="center"
               numberOfLines={2}
               adjustsFontSizeToFit
@@ -38,7 +41,6 @@ export function SegmentedTabs<T extends string>({ tabs, active, onChange }: Segm
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
     borderRadius: Radius.md,
     padding: 4,
     gap: 4,

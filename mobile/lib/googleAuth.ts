@@ -134,6 +134,40 @@ export async function getGoogleAccessToken() {
   return SecureStore.getItemAsync(GOOGLE_ACCESS_TOKEN_KEY);
 }
 
+/** Prefer stored access token; fall back to refresh token exchange. */
+export async function ensureGoogleAccessToken(): Promise<string | null> {
+  const existing = await getGoogleAccessToken();
+  if (existing) return existing;
+  return refreshGoogleAccessToken();
+}
+
+export async function refreshGoogleAccessToken(): Promise<string | null> {
+  const refreshToken = await SecureStore.getItemAsync(GOOGLE_REFRESH_TOKEN_KEY);
+  if (!refreshToken) return null;
+
+  const { webClientId, webClientSecret } = getGoogleClientIds();
+  const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
+  const clientId = isNative ? getPlatformGoogleClientId() : webClientId;
+
+  const params: Record<string, string> = {
+    refresh_token: refreshToken,
+    client_id: clientId,
+    grant_type: 'refresh_token',
+  };
+  if (!isNative && webClientSecret) params.client_secret = webClientSecret;
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(params).toString(),
+  });
+  const data = await resp.json();
+  if (!resp.ok || !data.access_token) return null;
+
+  await persistGoogleTokens(data.access_token as string);
+  return data.access_token as string;
+}
+
 export async function clearGoogleTokens() {
   await SecureStore.deleteItemAsync(GOOGLE_ACCESS_TOKEN_KEY);
   await SecureStore.deleteItemAsync(GOOGLE_REFRESH_TOKEN_KEY);

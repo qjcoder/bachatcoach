@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { phoneKey } from '../lib/phone.js';
 
 const loanEntrySchema = new mongoose.Schema(
   {
@@ -16,6 +17,7 @@ const contactSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     nameUr: { type: String, trim: true, default: '' },
     phone: { type: String, trim: true, default: '' },
+    phoneKey: { type: String, trim: true, default: '', index: true },
     direction: { type: String, enum: ['i_lent', 'i_borrowed'], required: true },
     entries: [loanEntrySchema],
     isSettled: { type: Boolean, default: false },
@@ -41,5 +43,10 @@ contactSchema.set('toJSON', { virtuals: true });
 contactSchema.set('toObject', { virtuals: true });
 
 contactSchema.index({ user: 1, isSettled: 1, direction: 1 });
+contactSchema.index({ user: 1, phoneKey: 1 });
+
+contactSchema.pre('validate', function setPhoneKey() {
+  this.phoneKey = phoneKey(this.phone);
+});
 
 export default mongoose.model('Contact', contactSchema);

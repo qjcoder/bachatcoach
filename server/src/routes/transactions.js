@@ -6,6 +6,28 @@ const router = express.Router();
 
 router.use(auth);
 
+function publicReceiptRef(value) {
+  if (!value || typeof value !== 'string') return '';
+  if (value.startsWith('data:')) return 'legacy';
+  if (value.startsWith('drive:') && value.length <= 200) return value;
+  return '';
+}
+
+function acceptReceiptRef(value) {
+  if (!value) return '';
+  if (typeof value !== 'string') {
+    const err = new Error('Invalid receipt');
+    err.status = 400;
+    throw err;
+  }
+  if (value.startsWith('data:') || value.length > 200 || !value.startsWith('drive:')) {
+    const err = new Error('Receipt photos must be saved to Google Drive');
+    err.status = 400;
+    throw err;
+  }
+  return value;
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const { type, month, year, category, from, to, limit = 50 } = req.query;
@@ -29,10 +51,73 @@ router.get('/', async (req, res, next) => {
     }
 
     const transactions = await Transaction.find(filter)
+      .select('type amount category customCategory paymentMethod note date receiptImage')
       .sort({ date: -1 })
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .lean();
 
-    res.json(transactions);
+    res.json(
+      transactions.map((t) => ({
+        ...t,
+        receiptImage: publicReceiptRef(t.receiptImage),
+      }))
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId }).lean();
+    if (!transaction) return res.status(404).json({ message: 'Transaction not found' });
+    res.json({
+      ...transaction,
+      receiptImage: publicReceiptRef(transaction.receiptImage),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
+    if (!transaction) return res.status(404).json({ message: 'Transaction not found' });
+
+    const { amount, category, paymentMethod, note, customCategory, date, receiptImage } = req.body;
+
+    if (amount != null) {
+      const nextAmount = Number(amount);
+      if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+        return res.status(400).json({ message: 'Enter a valid amount' });
+      }
+      transaction.amount = nextAmount;
+    }
+
+    if (category != null) transaction.category = category;
+    if (paymentMethod != null) transaction.paymentMethod = paymentMethod;
+    if (note != null) transaction.note = note;
+    if (date) transaction.date = new Date(date);
+
+    if (customCategory != null) {
+      const trimmedCustom = typeof customCategory === 'string' ? customCategory.trim() : '';
+      const nextCategory = category != null ? category : transaction.category;
+      if ((nextCategory === 'other' || nextCategory === 'other_income') && !trimmedCustom) {
+        return res.status(400).json({ message: 'Custom category is required for Other' });
+      }
+      transaction.customCategory = trimmedCustom;
+    }
+
+    if (receiptImage) {
+      transaction.receiptImage = acceptReceiptRef(receiptImage);
+    }
+
+    await transaction.save();
+    res.json({
+      ...transaction.toObject(),
+      receiptImage: publicReceiptRef(transaction.receiptImage),
+    });
   } catch (err) {
     next(err);
   }
@@ -50,9 +135,7 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ message: 'Custom category is required for Other' });
     }
 
-    if (receiptImage && receiptImage.length > 6_000_000) {
-      return res.status(400).json({ message: 'Receipt image is too large' });
-    }
+    const receiptRef = acceptReceiptRef(receiptImage);
 
     const transaction = await Transaction.create({
       user: req.userId,
@@ -63,10 +146,13 @@ router.post('/', async (req, res, next) => {
       note,
       customCategory: trimmedCustom,
       date: date ? new Date(date) : new Date(),
-      receiptImage: receiptImage || '',
+      receiptImage: receiptRef,
     });
 
-    res.status(201).json(transaction);
+    res.status(201).json({
+      ...transaction.toObject(),
+      receiptImage: publicReceiptRef(transaction.receiptImage),
+    });
   } catch (err) {
     next(err);
   }

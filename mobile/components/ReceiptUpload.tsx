@@ -10,7 +10,7 @@ import { Brand, Radius } from '@/constants/theme';
 
 type ReceiptUploadProps = {
   previewUri: string | null;
-  onChange: (value: { uri: string; base64: string } | null) => void;
+  onChange: (value: { uri: string } | null) => void;
   accent?: string;
 };
 
@@ -23,7 +23,6 @@ async function pickFromLibrary() {
     allowsEditing: true,
     aspect: [4, 3],
     quality: 0.6,
-    base64: true,
   });
 }
 
@@ -35,7 +34,6 @@ async function pickFromCamera() {
     allowsEditing: true,
     aspect: [4, 3],
     quality: 0.6,
-    base64: true,
   });
 }
 
@@ -59,10 +57,7 @@ export function ReceiptUpload({ previewUri, onChange, accent = Brand.primary }: 
     if (result.canceled || !result.assets[0]?.uri) return;
 
     const asset = result.assets[0];
-    onChange({
-      uri: asset.uri,
-      base64: asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : '',
-    });
+    onChange({ uri: asset.uri });
   };
 
   return (
@@ -103,7 +98,7 @@ export function ReceiptUpload({ previewUri, onChange, accent = Brand.primary }: 
         </Pressable>
         <Pressable
           onPress={() => handlePick('library')}
-          style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          style={[styles.actionBtn, { backgroundColor: colors.field, borderColor: colors.border }]}>
           <View style={styles.actionContent}>
             <Ionicons name="images" size={20} color={accent} />
             <AppText variant="captionBold" color={colors.text} align="center" numberOfLines={2} style={styles.actionLabel}>

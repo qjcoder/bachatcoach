@@ -10,36 +10,24 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useTheme } from '@/context/ThemeContext';
-import { setStoredLanguage } from '@/i18n';
-import { type AppLanguage, normalizeLanguage } from '@/lib/language';
-import { Brand } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 
-const LANGS: { code: AppLanguage; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'ur', label: 'اردو' },
-  { code: 'roman', label: 'Roman' },
-];
-
 type AuthScreenProps = {
-  title: string;
-  subtitle: string;
+  title?: string;
+  subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
 };
 
 export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProps) {
   const insets = useSafeAreaInsets();
-  const { i18n } = useTranslation();
   const { resolved, toggle } = useTheme();
   const isDark = resolved === 'dark';
-  const currentLang = normalizeLanguage(i18n.language);
 
   const gradientColors = isDark
     ? (['#020617', '#052e1f', '#064E3B', '#047857'] as const)
@@ -80,33 +68,35 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
         bounces={false}>
 
         <View style={styles.hero}>
-          <View style={styles.logoRing}>
-            <BrandLogo size={60} />
-          </View>
-          <View style={styles.titleSlot}>
-            <AppText
-              variant="h1"
-              color="#FFFFFF"
-              align="center"
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.72}
-              style={styles.title}>
-              {title}
-            </AppText>
-          </View>
-          <View style={styles.subtitleSlot}>
-            <AppText
-              variant="bodySmall"
-              color="rgba(255,255,255,0.75)"
-              align="center"
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-              style={styles.subtitle}>
-              {subtitle}
-            </AppText>
-          </View>
+          <BrandLogo mode="auth" size={64} style={styles.logo} />
+          {title ? (
+            <View style={styles.titleSlot}>
+              <AppText
+                variant="h1"
+                color="#FFFFFF"
+                align="center"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={styles.title}>
+                {title}
+              </AppText>
+            </View>
+          ) : null}
+          {subtitle ? (
+            <View style={styles.subtitleSlot}>
+              <AppText
+                variant="bodySmall"
+                color="rgba(255,255,255,0.75)"
+                align="center"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={styles.subtitle}>
+                {subtitle}
+              </AppText>
+            </View>
+          ) : null}
         </View>
 
         <View style={[styles.glass, isDark && styles.glassDark]}>
@@ -114,25 +104,6 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
         </View>
 
         {footer ? <View style={styles.footer}>{footer}</View> : null}
-
-        <View style={styles.langTrack}>
-          {LANGS.map((lang) => {
-            const selected = currentLang === lang.code;
-            return (
-              <Pressable
-                key={lang.code}
-                onPress={() => setStoredLanguage(lang.code)}
-                style={[styles.langChip, selected && styles.langChipOn]}>
-                <AppText
-                  variant="captionBold"
-                  color={selected ? Brand.primary : 'rgba(255,255,255,0.8)'}
-                  align="center">
-                  {lang.label}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -165,18 +136,8 @@ const styles = StyleSheet.create({
   blobBR: { width: 220, height: 220, bottom: 40, right: -60 },
   blobM: { width: 160, height: 160, top: '40%', left: -50, backgroundColor: 'rgba(255,255,255,0.04)' },
 
-  hero: { alignItems: 'center', marginBottom: 28, width: '100%' },
-  logoRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
+  hero: { alignItems: 'center', marginBottom: 20, width: '100%' },
+  logo: { marginBottom: 8 },
   titleSlot: {
     width: '100%',
     height: 34,
@@ -226,22 +187,4 @@ const styles = StyleSheet.create({
   },
 
   footer: { marginTop: 24, alignItems: 'center' },
-
-  langTrack: {
-    flexDirection: 'row',
-    marginTop: 20,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 999,
-    padding: 3,
-    width: '100%',
-    maxWidth: 320,
-    // Keep English → Urdu → Roman order in both LTR and RTL
-    direction: 'ltr',
-  },
-  langChip: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 999,
-  },
-  langChipOn: { backgroundColor: '#FFFFFF' },
 });

@@ -1,53 +1,7 @@
-import { getGoogleAccessToken } from '@/lib/googleAuth';
+import { APP_FOLDER_NAME, DRIVE_UPLOAD, driveFetch, ensureAppFolderId, findFolderId } from '@/lib/googleDrive';
+import { ensureGoogleAccessToken } from '@/lib/googleAuth';
 
-const DRIVE_API = 'https://www.googleapis.com/drive/v3';
-const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const BACKUP_FILENAME = 'BachatCoach-backup.json';
-const FOLDER_NAME = 'BachatCoach';
-
-async function driveFetch(path: string, init: RequestInit = {}) {
-  const token = await getGoogleAccessToken();
-  if (!token) throw new Error('Google Drive is not connected. Sign in with Google again.');
-
-  const res = await fetch(path.startsWith('http') ? path : `${DRIVE_API}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(init.headers || {}),
-    },
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Drive request failed (${res.status})`);
-  }
-  return res;
-}
-
-async function findFolderId(): Promise<string | null> {
-  const q = encodeURIComponent(
-    `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
-  );
-  const res = await driveFetch(`/files?q=${q}&spaces=drive&fields=files(id,name)`);
-  const data = await res.json();
-  return data.files?.[0]?.id || null;
-}
-
-async function ensureFolderId(): Promise<string> {
-  const existing = await findFolderId();
-  if (existing) return existing;
-
-  const res = await driveFetch('/files', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: FOLDER_NAME,
-      mimeType: 'application/vnd.google-apps.folder',
-    }),
-  });
-  const data = await res.json();
-  return data.id;
-}
 
 async function findBackupFileId(folderId: string): Promise<string | null> {
   const q = encodeURIComponent(
@@ -59,7 +13,7 @@ async function findBackupFileId(folderId: string): Promise<string | null> {
 }
 
 export async function uploadBackupToDrive(payload: unknown): Promise<{ fileId: string }> {
-  const folderId = await ensureFolderId();
+  const folderId = await ensureAppFolderId();
   const existingId = await findBackupFileId(folderId);
   const body = JSON.stringify(payload, null, 2);
   const metadata = {
@@ -78,7 +32,7 @@ export async function uploadBackupToDrive(payload: unknown): Promise<{ fileId: s
     `${body}\r\n` +
     `--${boundary}--`;
 
-  const token = await getGoogleAccessToken();
+  const token = await ensureGoogleAccessToken();
   if (!token) throw new Error('Google Drive is not connected. Sign in with Google again.');
 
   const url = existingId
@@ -103,9 +57,8 @@ export async function uploadBackupToDrive(payload: unknown): Promise<{ fileId: s
 }
 
 export async function downloadBackupFromDrive(): Promise<unknown> {
-  const folderId = await findFolderId();
+  const folderId = await findFolderId(APP_FOLDER_NAME);
   if (!folderId) throw new Error('No BachatCoach backup found on Google Drive.');
-
   const fileId = await findBackupFileId(folderId);
   if (!fileId) throw new Error('No BachatCoach backup found on Google Drive.');
 

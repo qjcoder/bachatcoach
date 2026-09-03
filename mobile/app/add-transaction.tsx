@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect } from 'react';
+import { useState, useLayoutEffect, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -29,6 +29,8 @@ import { isOtherCategory } from '@/lib/category';
 import { useAuth } from '@/context/AuthContext';
 import { getCurrency } from '@/constants/currencies';
 import Colors from '@/constants/Colors';
+import { ensureGoogleAccessToken } from '@/lib/googleAuth';
+import { uploadReceiptToDrive, hasReceipt } from '@/lib/googleDrive';
 import { useColorScheme } from '@/components/useColorScheme';
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -59,9 +61,25 @@ const PAYMENT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   card: 'card-outline',
 };
 
+function firstParam(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export default function AddTransactionScreen() {
-  const { type: paramType } = useLocalSearchParams<{ type?: string }>();
-  const type = paramType === 'income' ? 'income' : 'expense';
+  const params = useLocalSearchParams<{
+    type?: string;
+    id?: string;
+    amount?: string;
+    category?: string;
+    customCategory?: string;
+    paymentMethod?: string;
+    note?: string;
+    date?: string;
+    receiptImage?: string;
+  }>();
+  const editingId = firstParam(params.id) || '';
+  const isEditing = Boolean(editingId);
+  const type = firstParam(params.type) === 'income' ? 'income' : 'expense';
   const isIncome = type === 'income';
   const accent = isIncome ? Brand.primary : Brand.danger;
   const gradient = isIncome
@@ -76,25 +94,80 @@ export default function AddTransactionScreen() {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
-  const { type: typeStyleFn, isRTL } = useAppType();
+  const { type: typeStyleFn } = useAppType();
   const currency = getCurrency(user?.currency);
 
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState<string>(categories[0]);
-  const [customCategory, setCustomCategory] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
-  const [note, setNote] = useState('');
-  const [txnDate, setTxnDate] = useState(new Date());
-  const [receipt, setReceipt] = useState<{ uri: string; base64: string } | null>(null);
+  const initialCategory = firstParam(params.category);
+  const initialPayment = firstParam(params.paymentMethod);
+  const initialDate = firstParam(params.date);
+  const [amount, setAmount] = useState(firstParam(params.amount) || '');
+  const [category, setCategory] = useState<string>(
+    initialCategory && (categories as readonly string[]).includes(initialCategory)
+      ? initialCategory
+      : categories[0]
+  );
+  const [customCategory, setCustomCategory] = useState(firstParam(params.customCategory) || '');
+  const [paymentMethod, setPaymentMethod] = useState<string>(
+    initialPayment && (PAYMENT_METHODS as readonly string[]).includes(initialPayment)
+      ? initialPayment
+      : 'cash'
+  );
+  const [note, setNote] = useState(firstParam(params.note) || '');
+  const [txnDate, setTxnDate] = useState(() => {
+    if (!initialDate) return new Date();
+    const parsed = new Date(initialDate);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  });
+  const [receipt, setReceipt] = useState<{ uri: string } | null>(null);
+  const [existingReceipt, setExistingReceipt] = useState(firstParam(params.receiptImage) || '');
   const [loading, setLoading] = useState(false);
+  const [loadingEntry, setLoadingEntry] = useState(false);
 
   useLayoutEffect(() => {
+    const title = isEditing
+      ? isIncome
+        ? t('expenses.editIncome')
+        : t('expenses.editExpense')
+      : isIncome
+        ? t('expenses.addIncome')
+        : t('expenses.addExpense');
     navigation.setOptions({
-      title: isIncome ? t('expenses.addIncome') : t('expenses.addExpense'),
+      title,
       headerStyle: { backgroundColor: accent },
     });
-  }, [navigation, isIncome, t, accent]);
+  }, [navigation, isIncome, isEditing, t, accent]);
+
+  useEffect(() => {
+    if (!editingId) return;
+    // Prefer values passed from the list. Fall back to API only if amount is missing.
+    if (firstParam(params.amount)) return;
+    let cancelled = false;
+    setLoadingEntry(true);
+    (async () => {
+      try {
+        const { data } = await api.get(`/transactions/${editingId}`);
+        if (cancelled) return;
+        setAmount(String(data.amount ?? ''));
+        if (data.category) setCategory(data.category);
+        setCustomCategory(data.customCategory || '');
+        if (data.paymentMethod) setPaymentMethod(data.paymentMethod);
+        setNote(data.note || '');
+        if (data.date) setTxnDate(new Date(data.date));
+        setExistingReceipt(typeof data.receiptImage === 'string' ? data.receiptImage : '');
+      } catch {
+        if (!cancelled) {
+          showAlert({ title: t('common.error'), message: t('expenses.loadFailed'), tone: 'error' });
+          router.back();
+        }
+      } finally {
+        if (!cancelled) setLoadingEntry(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editingId, params.amount, router, showAlert, t]);
 
   const save = async () => {
     if (!amount || Number(amount) <= 0) {
@@ -111,7 +184,20 @@ export default function AddTransactionScreen() {
     }
     setLoading(true);
     try {
-      await api.post('/transactions', {
+      let receiptImage: string | undefined;
+      if (receipt?.uri) {
+        const token = await ensureGoogleAccessToken();
+        if (!token) {
+          showAlert({
+            title: t('expenses.receipt'),
+            message: t('expenses.receiptNeedGoogle'),
+            tone: 'warning',
+          });
+          return;
+        }
+        receiptImage = await uploadReceiptToDrive(receipt.uri, type);
+      }
+      const payload = {
         type,
         amount: Number(amount),
         category,
@@ -119,11 +205,24 @@ export default function AddTransactionScreen() {
         paymentMethod: isIncome ? undefined : paymentMethod,
         note,
         date: txnDate.toISOString(),
-        receiptImage: receipt?.base64 || '',
-      });
+        ...(receiptImage ? { receiptImage } : {}),
+      };
+      if (isEditing) {
+        await api.patch(`/transactions/${editingId}`, payload);
+      } else {
+        await api.post('/transactions', {
+          ...payload,
+          receiptImage: receiptImage || '',
+        });
+      }
       router.back();
-    } catch {
-      showAlert({ title: t('common.error'), message: t('expenses.saveFailed'), tone: 'error' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('expenses.saveFailed');
+      showAlert({
+        title: t('common.error'),
+        message: message.includes('Drive') || message.includes('Google') ? t('expenses.receiptUploadFailed') : t('expenses.saveFailed'),
+        tone: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -160,13 +259,18 @@ export default function AddTransactionScreen() {
           <AppText variant="label" color="rgba(255,255,255,0.88)" align="center" style={styles.heroLabel}>
             {t('expenses.amount')} ({currency.code})
           </AppText>
-          <RTLRow style={styles.amountRow} gap={4}>
+          <View style={styles.amountRow}>
             <AppText variant="h2" color="rgba(255,255,255,0.75)">{currency.symbol}</AppText>
             <TextInput
               style={[
                 styles.amountInput,
                 typeStyleFn('amount'),
-                { color: '#FFFFFF', writingDirection: isRTL ? 'rtl' : 'ltr' },
+                {
+                  color: '#FFFFFF',
+                  textAlign: 'center',
+                  writingDirection: 'ltr',
+                  letterSpacing: 0,
+                },
               ]}
               value={amount}
               onChangeText={setAmount}
@@ -174,8 +278,10 @@ export default function AddTransactionScreen() {
               placeholder="0"
               placeholderTextColor="rgba(255,255,255,0.45)"
               selectionColor="#FFFFFF"
+              textAlign="center"
+              underlineColorAndroid="transparent"
             />
-          </RTLRow>
+          </View>
         </LinearGradient>
 
         <View style={styles.form}>
@@ -232,6 +338,11 @@ export default function AddTransactionScreen() {
 
           <FormSection title={t('expenses.receipt')}>
             <ReceiptUpload previewUri={receipt?.uri ?? null} onChange={setReceipt} accent={accent} />
+            {isEditing && !receipt && hasReceipt(existingReceipt) ? (
+              <AppText variant="caption" color={colors.muted} style={styles.receiptKept}>
+                {t('expenses.receiptKept')}
+              </AppText>
+            ) : null}
           </FormSection>
 
           <FormSection title={t('expenses.note')}>
@@ -254,12 +365,12 @@ export default function AddTransactionScreen() {
             borderTopColor: colors.border,
           },
         ]}>
-        <Pressable onPress={save} disabled={loading} style={({ pressed }) => [pressed && styles.pressed]}>
+        <Pressable onPress={save} disabled={loading || loadingEntry} style={({ pressed }) => [pressed && styles.pressed]}>
           <LinearGradient
             colors={[...gradient]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={[styles.saveBtn, loading && styles.saveDisabled]}>
+            style={[styles.saveBtn, (loading || loadingEntry) && styles.saveDisabled]}>
             <RTLRow gap={10} style={styles.saveInner}>
               <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
               <AppText variant="button" color="#FFFFFF">
@@ -316,13 +427,23 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.28)',
   },
   heroLabel: { marginBottom: 8 },
-  amountRow: { justifyContent: 'center', alignItems: 'center' },
+  amountRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    width: '100%',
+  },
   amountInput: {
-    minWidth: 120,
+    minWidth: 160,
+    flexGrow: 0,
     textAlign: 'center',
     paddingVertical: 4,
+    paddingHorizontal: 4,
     fontSize: 40,
     lineHeight: 48,
+    includeFontPadding: false,
   },
   form: {
     paddingHorizontal: Spacing.md,
@@ -330,6 +451,7 @@ const styles = StyleSheet.create({
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   customCategory: { marginTop: Spacing.sm },
+  receiptKept: { marginTop: 8 },
   footer: {
     paddingHorizontal: Spacing.md,
     paddingTop: 12,

@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { RTLRow } from '@/components/RTLRow';
 import { Brand, Radius } from '@/constants/theme';
+import { useColors } from '@/components/useColorScheme';
 
 type ChipProps = {
   label: string;
@@ -13,9 +14,10 @@ type ChipProps = {
 };
 
 export function Chip({ label, selected, onPress, icon, tint = Brand.primary }: ChipProps) {
-  const activeColor = selected ? '#FFFFFF' : '#475569';
-  const activeBg = selected ? tint : '#F1F5F9';
-  const borderColor = selected ? tint : '#E2E8F0';
+  const colors = useColors();
+  const activeColor = selected ? '#FFFFFF' : colors.text;
+  const activeBg = selected ? tint : colors.field;
+  const borderColor = selected ? tint : colors.border;
 
   return (
     <Pressable

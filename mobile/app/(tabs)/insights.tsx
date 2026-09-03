@@ -5,7 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import api from '@/lib/api';
-import { useFormatPKR } from '@/lib/format';
+import { useFormatPKR, formatAmount } from '@/lib/format';
 import { exportMonthlyReportPdf, type MonthlyReportData } from '@/lib/monthlyReportPdf';
 import { useAuth } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
@@ -68,8 +68,7 @@ export default function InsightsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadAll(reportYear).catch(() => {
-        setData(null);
-        setReport(null);
+        /* keep previous insights / report */
       });
     }, [i18n.language, reportYear])
   );
@@ -153,58 +152,84 @@ export default function InsightsScreen() {
         </RTLRow>
 
         <View style={[styles.reportTable, { borderColor: colors.border }]}>
-          <RTLRow style={[styles.reportHeader, { backgroundColor: '#F1F5F9' }]} gap={4}>
-            <AppText variant="captionBold" color={colors.muted} style={styles.colMonth}>
+          <RTLRow style={[styles.reportHeader, { backgroundColor: colors.field }]} gap={4}>
+            <AppText variant="captionBold" color={colors.muted} style={styles.colMonth} align="center">
               {t('insights.reportMonth')}
             </AppText>
-            <AppText variant="captionBold" color={Brand.primary} style={styles.colNum} align="right">
-              {t('insights.reportIncome')}
-            </AppText>
-            <AppText variant="captionBold" color={Brand.danger} style={styles.colNum} align="right">
-              {t('insights.reportExpenses')}
-            </AppText>
-            <AppText variant="captionBold" color={colors.text} style={styles.colNum} align="right">
-              {t('insights.reportSaved')}
-            </AppText>
+            <View style={styles.colNumWrap}>
+              <AppText variant="captionBold" color={Brand.primary} style={styles.colNumText} align="center">
+                {t('insights.reportIncome')}
+              </AppText>
+            </View>
+            <View style={styles.colNumWrap}>
+              <AppText variant="captionBold" color={Brand.danger} style={styles.colNumText} align="center">
+                {t('insights.reportExpenses')}
+              </AppText>
+            </View>
+            <View style={styles.colNumWrap}>
+              <AppText variant="captionBold" color={colors.text} style={styles.colNumText} align="center">
+                {t('insights.reportSaved')}
+              </AppText>
+            </View>
           </RTLRow>
           {report?.months.map((row) => (
-            <RTLRow key={row.month} style={styles.reportRow} gap={4}>
-              <AppText variant="caption" color={colors.text} style={styles.colMonth}>
+            <RTLRow key={row.month} style={[styles.reportRow, { borderBottomColor: colors.border }]} gap={4}>
+              <AppText variant="caption" color={colors.text} style={styles.colMonth} align="center">
                 {formatMonthShort(row.month)}
               </AppText>
-              <AppText variant="captionBold" color={Brand.primary} style={styles.colNum} align="right">
-                {formatPKR(row.income)}
-              </AppText>
-              <AppText variant="captionBold" color={Brand.danger} style={styles.colNum} align="right">
-                {formatPKR(row.expenses)}
-              </AppText>
-              <AppText
-                variant="captionBold"
-                color={row.saved >= 0 ? Brand.primary : Brand.danger}
-                style={styles.colNum}
-                align="right">
-                {formatPKR(row.saved)}
-              </AppText>
+              <View style={styles.colNumWrap}>
+                <AppText variant="captionBold" color={Brand.primary} style={styles.colNumText} align="center" numberOfLines={1}>
+                  {formatAmount(row.income, i18n.language)}
+                </AppText>
+              </View>
+              <View style={styles.colNumWrap}>
+                <AppText variant="captionBold" color={Brand.danger} style={styles.colNumText} align="center" numberOfLines={1}>
+                  {formatAmount(row.expenses, i18n.language)}
+                </AppText>
+              </View>
+              <View style={styles.colNumWrap}>
+                <AppText
+                  variant="captionBold"
+                  color={row.saved >= 0 ? Brand.primary : Brand.danger}
+                  style={styles.colNumText}
+                  align="center"
+                  numberOfLines={1}>
+                  {formatAmount(row.saved, i18n.language)}
+                </AppText>
+              </View>
             </RTLRow>
           ))}
           {report ? (
-            <RTLRow style={[styles.reportRow, styles.reportTotal, { borderTopColor: colors.border }]} gap={4}>
-              <AppText variant="bodySmallBold" color={colors.text} style={styles.colMonth}>
+            <RTLRow
+              style={[
+                styles.reportRow,
+                styles.reportTotal,
+                { borderTopColor: colors.border, backgroundColor: colors.field },
+              ]}
+              gap={4}>
+              <AppText variant="captionBold" color={colors.text} style={styles.colMonth} align="center" numberOfLines={2}>
                 {t('insights.reportTotal')}
               </AppText>
-              <AppText variant="bodySmallBold" color={Brand.primary} style={styles.colNum} align="right">
-                {formatPKR(report.totals.income)}
-              </AppText>
-              <AppText variant="bodySmallBold" color={Brand.danger} style={styles.colNum} align="right">
-                {formatPKR(report.totals.expenses)}
-              </AppText>
-              <AppText
-                variant="bodySmallBold"
-                color={report.totals.saved >= 0 ? Brand.primary : Brand.danger}
-                style={styles.colNum}
-                align="right">
-                {formatPKR(report.totals.saved)}
-              </AppText>
+              <View style={styles.colNumWrap}>
+                <AppText variant="captionBold" color={Brand.primary} style={styles.colNumText} align="center" numberOfLines={2}>
+                  {formatAmount(report.totals.income, i18n.language)}
+                </AppText>
+              </View>
+              <View style={styles.colNumWrap}>
+                <AppText variant="captionBold" color={Brand.danger} style={styles.colNumText} align="center" numberOfLines={2}>
+                  {formatAmount(report.totals.expenses, i18n.language)}
+                </AppText>
+              </View>
+              <View style={styles.colNumWrap}>
+                <AppText
+                  variant="captionBold"
+                  color={report.totals.saved >= 0 ? Brand.primary : Brand.danger}
+                  style={styles.colNumText}
+                  align="center"
+                  numberOfLines={2}>
+                  {formatAmount(report.totals.saved, i18n.language)}
+                </AppText>
+              </View>
             </RTLRow>
           ) : null}
         </View>
@@ -291,7 +316,7 @@ function CompareRow({
   const icon = value === 0 ? 'remove' : value > 0 ? 'arrow-up' : 'arrow-down';
 
   return (
-    <RTLRow style={styles.compareRow} gap={8}>
+    <RTLRow style={[styles.compareRow, { borderBottomColor: colors.border }]} gap={8}>
       <AppText variant="bodySmall" color={colors.muted} style={[styles.compareLabel, textBlock]}>{label}</AppText>
       <RTLRow gap={4} style={styles.compareValue}>
         <Ionicons name={icon} size={14} color={color} />
@@ -332,15 +357,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
   },
   reportTotal: {
     borderBottomWidth: 0,
     borderTopWidth: 1,
-    backgroundColor: '#F8FAFC',
   },
-  colMonth: { flex: 1.1 },
-  colNum: { flex: 1, fontSize: 11 },
+  colMonth: { flex: 1.1, textAlign: 'center' },
+  colNumWrap: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  colNumText: { fontSize: 11, textAlign: 'center', width: '100%' },
   exportBtn: {
     borderRadius: Radius.lg,
     paddingVertical: 14,
@@ -351,7 +375,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
   },
   compareLabel: { flex: 1 },
   compareValue: { alignItems: 'center' },

@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { View, StyleSheet, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Pressable, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
@@ -164,14 +164,28 @@ type ListCardProps = {
   subtitle?: string;
   meta?: string;
   trailing: ReactNode;
+  onPress?: () => void;
+  onEdit?: () => void;
+  editLabel?: string;
 };
 
-export function ListCard({ icon, iconColor, iconBg, title, subtitle, meta, trailing }: ListCardProps) {
+export function ListCard({
+  icon,
+  iconColor,
+  iconBg,
+  title,
+  subtitle,
+  meta,
+  trailing,
+  onPress,
+  onEdit,
+  editLabel,
+}: ListCardProps) {
   const colors = Colors[useColorScheme() ?? 'light'];
   const { textBlock, contentAlign, alignStart } = useDirection();
 
-  return (
-    <RTLRow style={[styles.listCard, { backgroundColor: colors.card }]} gap={14}>
+  const body = (
+    <RTLRow style={[styles.listCard, onEdit && styles.listCardWithEdit, { backgroundColor: colors.card }]} gap={14}>
       <View style={[styles.listIcon, { backgroundColor: iconBg }]}>
         <Ionicons name={icon} size={22} color={iconColor} />
       </View>
@@ -192,6 +206,28 @@ export function ListCard({ icon, iconColor, iconBg, title, subtitle, meta, trail
       </View>
       <View style={[styles.listTrailing, { alignItems: alignStart }]}>{trailing}</View>
     </RTLRow>
+  );
+
+  return (
+    <View>
+      {onEdit ? (
+        <Pressable
+          onPress={onEdit}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={editLabel}
+          style={[styles.editBtn, { backgroundColor: colors.field, borderColor: colors.border }]}>
+          <Ionicons name="pencil" size={14} color={colors.muted} />
+        </Pressable>
+      ) : null}
+      {onPress ? (
+        <Pressable onPress={onPress} accessibilityRole="button">
+          {body}
+        </Pressable>
+      ) : (
+        body
+      )}
+    </View>
   );
 }
 
@@ -286,6 +322,21 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     marginBottom: 10,
     ...Shadow.card,
+  },
+  listCardWithEdit: {
+    paddingTop: 28,
+  },
+  editBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listIcon: {
     width: 48,

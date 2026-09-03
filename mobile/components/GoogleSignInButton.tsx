@@ -98,18 +98,27 @@ export function GoogleSignInButton({ onSuccess }: Props) {
       let refreshToken: string | undefined =
         result.authentication?.refreshToken || undefined;
 
-      if (!idToken) {
-        const authCode = result.params?.code as string | undefined;
-        if (authCode) {
-          const tokens = await exchangeCodeForTokens(authCode, request?.codeVerifier);
-          idToken = tokens.idToken;
-          accessToken = tokens.accessToken ?? accessToken;
-          refreshToken = tokens.refreshToken ?? refreshToken;
-        }
+      // Always exchange the auth code when present so we get Drive access + refresh tokens.
+      // Skipping exchange when id_token is already present left many sessions without Drive.
+      const authCode = result.params?.code as string | undefined;
+      if (authCode) {
+        const tokens = await exchangeCodeForTokens(authCode, request?.codeVerifier);
+        idToken = tokens.idToken ?? idToken;
+        accessToken = tokens.accessToken ?? accessToken;
+        refreshToken = tokens.refreshToken ?? refreshToken;
       }
 
       if (!idToken) {
         showAlert({ title: t('common.error'), message: t('auth.googleNoIdToken'), tone: 'error' });
+        return;
+      }
+
+      if (!accessToken) {
+        showAlert({
+          title: t('common.error'),
+          message: t('expenses.receiptNeedGoogle'),
+          tone: 'warning',
+        });
         return;
       }
 

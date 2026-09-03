@@ -6,6 +6,7 @@ import { useAppType } from '@/components/AppText';
 import { useIsRTL } from '@/hooks/useIsRTL';
 import { Brand, Radius } from '@/constants/theme';
 import { getFontFamily } from '@/constants/typography';
+import { useColors, useColorScheme } from '@/components/useColorScheme';
 
 type TextFieldProps = TextInputProps & {
   label?: string;
@@ -26,17 +27,19 @@ export function TextField({
 }: TextFieldProps) {
   const { lang } = useAppType();
   const isRTL = useIsRTL();
+  const colors = useColors();
+  const scheme = useColorScheme();
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(secureTextEntry ?? false);
 
-  const borderColor = focused ? Brand.primary : Brand.border;
-  const iconColor = focused ? Brand.primary : Brand.textMuted;
-  const bgColor = focused ? '#F0FDF4' : '#F8FAFC';
+  const borderColor = focused ? Brand.primary : colors.border;
+  const iconColor = focused ? Brand.primary : colors.muted;
+  const bgColor = focused ? colors.fieldFocused : colors.field;
 
   return (
     <View style={[styles.wrap, { direction: isRTL ? 'rtl' : 'ltr' }]}>
       {label ? (
-        <AppText variant="label" style={[styles.label, focused && styles.labelFocused]}>
+        <AppText variant="label" color={focused ? Brand.primary : colors.muted} style={styles.label}>
           {label}
         </AppText>
       ) : null}
@@ -52,6 +55,7 @@ export function TextField({
             {
               fontFamily: getFontFamily(lang, 400),
               fontSize: 15.5,
+              color: colors.text,
               writingDirection: isRTL ? 'rtl' : 'ltr',
               textAlign: 'left',
             },
@@ -59,8 +63,8 @@ export function TextField({
           ]}
           // English placeholders mis-align under Urdu RTL — omit them.
           placeholder={isRTL ? undefined : placeholder}
-          placeholderTextColor="#94A3B8"
-          textAlignVertical="center"
+          placeholderTextColor={colors.placeholder}
+          keyboardAppearance={scheme}
           secureTextEntry={hidden}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
@@ -69,11 +73,11 @@ export function TextField({
 
         {secureTextEntry ? (
           <Pressable onPress={() => setHidden((h) => !h)} style={styles.trailingBtn} hitSlop={10}>
-            <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={Brand.textMuted} />
+            <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={colors.muted} />
           </Pressable>
         ) : trailingIcon ? (
           <Pressable onPress={onTrailingPress} style={styles.trailingBtn} hitSlop={10}>
-            <Ionicons name={trailingIcon} size={20} color={Brand.textMuted} />
+            <Ionicons name={trailingIcon} size={20} color={colors.muted} />
           </Pressable>
         ) : null}
       </View>
@@ -83,8 +87,7 @@ export function TextField({
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 14, width: '100%' },
-  label: { marginBottom: 6, color: '#475569', fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
-  labelFocused: { color: Brand.primary },
+  label: { marginBottom: 6, fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
 
   inputRow: {
     flexDirection: 'row',
@@ -103,7 +106,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minWidth: 0,
-    color: Brand.text,
     ...(Platform.OS === 'ios'
       ? { paddingVertical: 14, lineHeight: 20 }
       : { paddingVertical: 12, textAlignVertical: 'center' as const }),

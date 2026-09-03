@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Brand, Radius } from '@/constants/theme';
+import { useColors } from '@/components/useColorScheme';
 
 type ButtonProps = {
   title: string;
@@ -11,12 +12,13 @@ type ButtonProps = {
 };
 
 export function Button({ title, onPress, variant = 'primary', disabled, style }: ButtonProps) {
+  const colors = useColors();
   const variantStyle =
     variant === 'primary'
       ? styles.primary
       : variant === 'secondary'
         ? styles.secondary
-        : styles.outline;
+        : [styles.outline, { backgroundColor: colors.field, borderColor: Brand.primary }];
 
   return (
     <Pressable

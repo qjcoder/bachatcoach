@@ -12,6 +12,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import {
   isBiometricEnabled,
   isLockEnabled,
+  verifyPattern,
   verifyPin,
 } from '@/lib/lock';
 
@@ -20,6 +21,7 @@ type LockContextType = {
   lockEnabled: boolean;
   biometricAvailable: boolean;
   unlockWithPin: (pin: string) => Promise<boolean>;
+  unlockWithPattern: (pattern: string) => Promise<boolean>;
   unlockWithBiometric: () => Promise<boolean>;
   lock: () => void;
   refreshLockSettings: () => Promise<void>;
@@ -63,6 +65,12 @@ export function LockProvider({ children }: { children: ReactNode }) {
     return ok;
   };
 
+  const unlockWithPattern = async (pattern: string) => {
+    const ok = await verifyPattern(pattern);
+    if (ok) setIsLocked(false);
+    return ok;
+  };
+
   const unlockWithBiometric = async () => {
     const enabled = await isBiometricEnabled();
     if (!enabled) return false;
@@ -87,6 +95,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
         lockEnabled,
         biometricAvailable,
         unlockWithPin,
+        unlockWithPattern,
         unlockWithBiometric,
         lock: () => setIsLocked(true),
         refreshLockSettings,

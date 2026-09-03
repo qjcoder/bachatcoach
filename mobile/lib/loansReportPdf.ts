@@ -13,6 +13,7 @@ export type LoanEntryReport = {
 export type LoanContactReport = {
   id: string;
   name: string;
+  nameUr?: string;
   phone: string;
   balance: number;
   entries: LoanEntryReport[];

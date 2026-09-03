@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { AuthScreen } from '@/components/AuthScreen';
 import { TextField } from '@/components/TextField';
 import { Brand } from '@/constants/theme';
+import { useColors } from '@/components/useColorScheme';
 
 type Purpose = 'login' | 'register';
 
@@ -20,6 +21,7 @@ export default function EmailOtpScreen() {
   const purpose: Purpose = params.purpose === 'register' ? 'register' : 'login';
   const { sendEmailOtp, loginWithEmailOtp } = useAuth();
   const { showAlert } = useDialog();
+  const colors = useColors();
 
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [name, setName] = useState('');
@@ -217,12 +219,12 @@ export default function EmailOtpScreen() {
             onPress={handleSend}
             disabled={loading || cooldown > 0}
             style={styles.resend}>
-            <AppText variant="bodySemibold" color={cooldown > 0 ? Brand.textMuted : Brand.primary}>
+            <AppText variant="bodySemibold" color={cooldown > 0 ? colors.muted : Brand.primary}>
               {cooldown > 0 ? t('auth.otpResendIn', { sec: cooldown }) : t('auth.otpResend')}
             </AppText>
           </Pressable>
           <Pressable onPress={() => setStep('email')} style={styles.resend}>
-            <AppText variant="caption" color={Brand.textMuted}>
+            <AppText variant="caption" color={colors.muted}>
               {t('auth.otpChangeEmail')}
             </AppText>
           </Pressable>

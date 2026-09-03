@@ -25,7 +25,7 @@ export function BottomSheet({ visible, title, onClose, children }: BottomSheetPr
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.titleRow}>
             <AppText variant="h2" color={colors.text} style={styles.title}>{title}</AppText>
             <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
@@ -53,7 +53,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#CBD5E1',
     alignSelf: 'center',
     marginBottom: 16,
   },

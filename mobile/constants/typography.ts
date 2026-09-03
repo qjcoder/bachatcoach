@@ -58,15 +58,17 @@ export const Type = {
 
 export type TypeVariantName = keyof typeof Type;
 
-export function typeStyle(lang: AppLanguage, variant: TypeVariantName): TextStyle {
+export function typeStyle(lang: AppLanguage, variant: TypeVariantName, scale = 1): TextStyle {
   const v = Type[variant] as TypeVariant;
   const useTransform = v.textTransform && lang !== 'ur';
   const urduBoost = lang === 'ur' ? 2 : 0;
   const rtl = lang === 'ur';
+  const fontSize = Math.max(10, Math.round(v.fontSize * scale));
+  const lineHeight = Math.max(fontSize + 2, Math.round((v.lineHeight + urduBoost) * scale));
   return {
     fontFamily: getFontFamily(lang, v.fontWeight),
-    fontSize: v.fontSize,
-    lineHeight: v.lineHeight + urduBoost,
+    fontSize,
+    lineHeight,
     letterSpacing: rtl ? 0 : v.letterSpacing,
     writingDirection: rtl ? 'rtl' : 'ltr',
     ...(useTransform ? { textTransform: v.textTransform } : {}),
