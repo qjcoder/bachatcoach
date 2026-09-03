@@ -12,6 +12,10 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '4.5mb' }));
 
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', app: 'BachatCoach API' });
+});
+
 app.use(async (_req, _res, next) => {
   try {
     await connectDb();
@@ -19,10 +23,6 @@ app.use(async (_req, _res, next) => {
   } catch (err) {
     next(err);
   }
-});
-
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', app: 'BachatCoach API' });
 });
 
 app.use('/api/auth', authRoutes);
