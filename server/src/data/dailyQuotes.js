@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const quotesPath = path.join(__dirname, '../../../mobile/data/dailyQuotes.json');
+const quotesPath = path.join(__dirname, 'dailyQuotes.json');
 const QUOTES = JSON.parse(readFileSync(quotesPath, 'utf8'));
 
 export function getDayOfYear(date = new Date()) {
