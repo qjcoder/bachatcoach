@@ -88,18 +88,25 @@ router.post('/restore', async (req, res, next) => {
     await Contact.deleteMany({ user: userId });
     await Goal.deleteMany({ user: userId });
 
-    const txs = (payload.transactions || []).map((t) => ({
-      user: userId,
-      type: t.type,
-      amount: t.amount,
-      category: t.category,
-      paymentMethod: t.paymentMethod || 'cash',
-      note: t.note || '',
-      customCategory: t.customCategory || '',
-      date: t.date ? new Date(t.date) : new Date(),
-      receiptImage:
-        typeof t.receiptImage === 'string' && t.receiptImage.startsWith('drive:') ? t.receiptImage : '',
-    }));
+    const txs = (payload.transactions || []).map((t) => {
+      const type = ['expense', 'income', 'savings'].includes(t.type)
+        ? t.type
+        : t.category === 'savings'
+          ? 'savings'
+          : 'expense';
+      return {
+        user: userId,
+        type,
+        amount: t.amount,
+        category: type === 'savings' ? 'savings' : t.category,
+        paymentMethod: t.paymentMethod || 'cash',
+        note: t.note || '',
+        customCategory: type === 'savings' ? '' : t.customCategory || '',
+        date: t.date ? new Date(t.date) : new Date(),
+        receiptImage:
+          typeof t.receiptImage === 'string' && t.receiptImage.startsWith('drive:') ? t.receiptImage : '',
+      };
+    });
     if (txs.length) await Transaction.insertMany(txs);
 
     const contacts = (payload.contacts || []).map((c) => ({

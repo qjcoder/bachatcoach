@@ -65,6 +65,16 @@ function firstParam(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+type TxnType = 'expense' | 'income' | 'savings';
+
+function resolveType(raw?: string): TxnType {
+  if (raw === 'income') return 'income';
+  if (raw === 'savings') return 'savings';
+  return 'expense';
+}
+
+const SAVINGS_PERCENTS = [10, 20, 30] as const;
+
 export default function AddTransactionScreen() {
   const params = useLocalSearchParams<{
     type?: string;
@@ -79,14 +89,17 @@ export default function AddTransactionScreen() {
   }>();
   const editingId = firstParam(params.id) || '';
   const isEditing = Boolean(editingId);
-  const type = firstParam(params.type) === 'income' ? 'income' : 'expense';
+  const type = resolveType(firstParam(params.type));
   const isIncome = type === 'income';
-  const accent = isIncome ? Brand.primary : Brand.danger;
-  const gradient = isIncome
-    ? (['#34D399', '#10B981', '#059669', '#047857'] as const)
-    : (['#FCA5A5', '#F87171', '#EF4444', '#DC2626'] as const);
+  const isSavings = type === 'savings';
+  const accent = isSavings ? Brand.secondary : isIncome ? Brand.primary : Brand.danger;
+  const gradient = isSavings
+    ? (['#FBBF24', '#F59E0B', '#D97706', '#B45309'] as const)
+    : isIncome
+      ? (['#34D399', '#10B981', '#059669', '#047857'] as const)
+      : (['#FCA5A5', '#F87171', '#EF4444', '#DC2626'] as const);
 
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { showAlert } = useDialog();
   const router = useRouter();
@@ -103,17 +116,20 @@ export default function AddTransactionScreen() {
   const initialDate = firstParam(params.date);
   const [amount, setAmount] = useState(firstParam(params.amount) || '');
   const [category, setCategory] = useState<string>(
-    initialCategory && (categories as readonly string[]).includes(initialCategory)
-      ? initialCategory
-      : categories[0]
+    isSavings
+      ? 'savings'
+      : initialCategory && (categories as readonly string[]).includes(initialCategory)
+        ? initialCategory
+        : categories[0]
   );
   const [customCategory, setCustomCategory] = useState(firstParam(params.customCategory) || '');
   const [paymentMethod, setPaymentMethod] = useState<string>(
     initialPayment && (PAYMENT_METHODS as readonly string[]).includes(initialPayment)
       ? initialPayment
-      : 'cash'
+      : 'bank'
   );
   const [note, setNote] = useState(firstParam(params.note) || '');
+  const [monthIncome, setMonthIncome] = useState(0);
   const [txnDate, setTxnDate] = useState(() => {
     if (!initialDate) return new Date();
     const parsed = new Date(initialDate);
@@ -126,17 +142,37 @@ export default function AddTransactionScreen() {
 
   useLayoutEffect(() => {
     const title = isEditing
-      ? isIncome
-        ? t('expenses.editIncome')
-        : t('expenses.editExpense')
-      : isIncome
-        ? t('expenses.addIncome')
-        : t('expenses.addExpense');
+      ? isSavings
+        ? t('expenses.editSavings')
+        : isIncome
+          ? t('expenses.editIncome')
+          : t('expenses.editExpense')
+      : isSavings
+        ? t('expenses.addSavings')
+        : isIncome
+          ? t('expenses.addIncome')
+          : t('expenses.addExpense');
     navigation.setOptions({
       title,
       headerStyle: { backgroundColor: accent },
     });
-  }, [navigation, isIncome, isEditing, t, accent]);
+  }, [navigation, isIncome, isSavings, isEditing, t, accent]);
+
+  useEffect(() => {
+    if (!isSavings) return;
+    let cancelled = false;
+    api
+      .get('/dashboard/summary', { params: { lang: i18n.language } })
+      .then(({ data }) => {
+        if (!cancelled) setMonthIncome(Number(data?.income) || 0);
+      })
+      .catch(() => {
+        if (!cancelled) setMonthIncome(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSavings, i18n.language]);
 
   useEffect(() => {
     if (!editingId) return;
@@ -169,12 +205,17 @@ export default function AddTransactionScreen() {
     };
   }, [editingId, params.amount, router, showAlert, t]);
 
+  const applyPercent = (pct: number) => {
+    if (monthIncome <= 0) return;
+    setAmount(String(Math.round((monthIncome * pct) / 100)));
+  };
+
   const save = async () => {
     if (!amount || Number(amount) <= 0) {
       showAlert({ title: t('common.error'), message: t('expenses.invalidAmount'), tone: 'error' });
       return;
     }
-    if (isOtherCategory(category) && !customCategory.trim()) {
+    if (!isSavings && isOtherCategory(category) && !customCategory.trim()) {
       showAlert({
         title: t('common.error'),
         message: t('expenses.customCategoryRequired'),
@@ -200,8 +241,8 @@ export default function AddTransactionScreen() {
       const payload = {
         type,
         amount: Number(amount),
-        category,
-        customCategory: isOtherCategory(category) ? customCategory.trim() : '',
+        category: isSavings ? 'savings' : category,
+        customCategory: isSavings ? '' : isOtherCategory(category) ? customCategory.trim() : '',
         paymentMethod: isIncome ? undefined : paymentMethod,
         note,
         date: txnDate.toISOString(),
@@ -246,12 +287,16 @@ export default function AddTransactionScreen() {
           <RTLRow style={styles.typeBadgeRow} gap={8}>
             <View style={styles.typeBadge}>
               <Ionicons
-                name={isIncome ? 'arrow-down-circle' : 'arrow-up-circle'}
+                name={isSavings ? 'wallet' : isIncome ? 'arrow-down-circle' : 'arrow-up-circle'}
                 size={16}
                 color="#FFFFFF"
               />
               <AppText variant="captionBold" color="#FFFFFF">
-                {isIncome ? t('expenses.income') : t('expenses.expense')}
+                {isSavings
+                  ? t('expenses.savingsTransfer')
+                  : isIncome
+                    ? t('expenses.income')
+                    : t('expenses.expense')}
               </AppText>
             </View>
           </RTLRow>
@@ -289,35 +334,63 @@ export default function AddTransactionScreen() {
             <TransactionDateTime value={txnDate} onChange={setTxnDate} accent={accent} />
           </FormSection>
 
-          <FormSection title={t('expenses.category')}>
-            <View style={styles.chips}>
-              {categories.map((cat) => (
-                <Chip
-                  key={cat}
-                  label={t(`categories.${cat}`)}
-                  icon={CATEGORY_ICONS[cat]}
-                  selected={category === cat}
-                  onPress={() => {
-                    setCategory(cat);
-                    if (!isOtherCategory(cat)) setCustomCategory('');
-                  }}
-                  tint={accent}
-                />
-              ))}
-            </View>
-            {isOtherCategory(category) && (
-              <View style={styles.customCategory}>
-                <TextField
-                  label={t('expenses.customCategory')}
-                  icon="create-outline"
-                  value={customCategory}
-                  onChangeText={setCustomCategory}
-                  placeholder={t('expenses.customCategoryPlaceholder')}
-                  autoFocus
-                />
+          {isSavings ? (
+            <FormSection title={t('expenses.savingsPercentHint')} subtitle={t('expenses.savingsNotSpending')}>
+              <View style={styles.chips}>
+                {SAVINGS_PERCENTS.map((pct) => (
+                  <Chip
+                    key={pct}
+                    label={`${pct}%`}
+                    selected={
+                      monthIncome > 0 &&
+                      amount === String(Math.round((monthIncome * pct) / 100))
+                    }
+                    onPress={() => applyPercent(pct)}
+                    tint={accent}
+                  />
+                ))}
               </View>
-            )}
-          </FormSection>
+              {monthIncome > 0 ? (
+                <AppText variant="caption" color={colors.muted} style={styles.percentHint}>
+                  {t('expenses.basedOnIncome', { amount: monthIncome.toLocaleString() })}
+                </AppText>
+              ) : (
+                <AppText variant="caption" color={colors.muted} style={styles.percentHint}>
+                  {t('expenses.noIncomeYet')}
+                </AppText>
+              )}
+            </FormSection>
+          ) : (
+            <FormSection title={t('expenses.category')}>
+              <View style={styles.chips}>
+                {categories.map((cat) => (
+                  <Chip
+                    key={cat}
+                    label={t(`categories.${cat}`)}
+                    icon={CATEGORY_ICONS[cat]}
+                    selected={category === cat}
+                    onPress={() => {
+                      setCategory(cat);
+                      if (!isOtherCategory(cat)) setCustomCategory('');
+                    }}
+                    tint={accent}
+                  />
+                ))}
+              </View>
+              {isOtherCategory(category) && (
+                <View style={styles.customCategory}>
+                  <TextField
+                    label={t('expenses.customCategory')}
+                    icon="create-outline"
+                    value={customCategory}
+                    onChangeText={setCustomCategory}
+                    placeholder={t('expenses.customCategoryPlaceholder')}
+                    autoFocus
+                  />
+                </View>
+              )}
+            </FormSection>
+          )}
 
           {!isIncome && (
             <FormSection title={t('expenses.paymentMethod')}>
@@ -350,7 +423,9 @@ export default function AddTransactionScreen() {
               icon="document-text-outline"
               value={note}
               onChangeText={setNote}
-              placeholder={t('expenses.notePlaceholder')}
+              placeholder={
+                isSavings ? t('expenses.savingsNotePlaceholder') : t('expenses.notePlaceholder')
+              }
             />
           </FormSection>
         </View>
@@ -452,6 +527,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   customCategory: { marginTop: Spacing.sm },
   receiptKept: { marginTop: 8 },
+  percentHint: { marginTop: 10 },
   footer: {
     paddingHorizontal: Spacing.md,
     paddingTop: 12,

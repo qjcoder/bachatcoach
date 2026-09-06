@@ -6,13 +6,14 @@ export type MonthlyReportRow = {
   month: number;
   income: number;
   expenses: number;
+  toSavings?: number;
   saved: number;
 };
 
 export type MonthlyReportData = {
   year: number;
   months: MonthlyReportRow[];
-  totals: { income: number; expenses: number; saved: number };
+  totals: { income: number; expenses: number; toSavings?: number; saved: number };
 };
 
 type ReportLabels = {
@@ -21,6 +22,7 @@ type ReportLabels = {
   month: string;
   income: string;
   expenses: string;
+  toSavings: string;
   saved: string;
   total: string;
   savingsRate: string;
@@ -57,6 +59,7 @@ function buildReportHtml(
           <td>${formatMonthName(row.month, data.year, locale)}</td>
           <td class="num income">${formatAmount(row.income, labels.currency, lang)}</td>
           <td class="num expense">${formatAmount(row.expenses, labels.currency, lang)}</td>
+          <td class="num to-savings">${formatAmount(row.toSavings || 0, labels.currency, lang)}</td>
           <td class="num saved" style="color:${savedColor}">${formatAmount(row.saved, labels.currency, lang)}</td>
         </tr>`;
     })
@@ -112,6 +115,7 @@ function buildReportHtml(
     .stat-value { font-size: 18px; font-weight: 800; margin-top: 6px; }
     .income { color: #047857; }
     .expense { color: #DC2626; }
+    .to-savings { color: #D97706; }
     .saved { color: #047857; }
     table {
       width: 100%;
@@ -161,6 +165,10 @@ function buildReportHtml(
       <div class="stat-value expense">${formatAmount(data.totals.expenses, labels.currency, lang)}</div>
     </div>
     <div class="stat">
+      <div class="stat-label">${labels.toSavings}</div>
+      <div class="stat-value to-savings">${formatAmount(data.totals.toSavings || 0, labels.currency, lang)}</div>
+    </div>
+    <div class="stat">
       <div class="stat-label">${labels.saved}</div>
       <div class="stat-value saved">${formatAmount(data.totals.saved, labels.currency, lang)}</div>
     </div>
@@ -176,6 +184,7 @@ function buildReportHtml(
         <th>${labels.month}</th>
         <th>${labels.income}</th>
         <th>${labels.expenses}</th>
+        <th>${labels.toSavings}</th>
         <th>${labels.saved}</th>
       </tr>
     </thead>
@@ -185,6 +194,7 @@ function buildReportHtml(
         <td>${labels.total}</td>
         <td class="num income">${formatAmount(data.totals.income, labels.currency, lang)}</td>
         <td class="num expense">${formatAmount(data.totals.expenses, labels.currency, lang)}</td>
+        <td class="num to-savings">${formatAmount(data.totals.toSavings || 0, labels.currency, lang)}</td>
         <td class="num saved">${formatAmount(data.totals.saved, labels.currency, lang)}</td>
       </tr>
     </tfoot>

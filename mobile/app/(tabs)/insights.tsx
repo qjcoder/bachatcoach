@@ -23,11 +23,12 @@ import { localeForLanguage, scriptLanguage } from '@/lib/language';
 type CategoryItem = { _id: string; total: number };
 
 type InsightsData = {
-  vsLastMonth: { income: number; expenses: number; saved: number };
+  vsLastMonth: { income: number; expenses: number; saved: number; toSavings?: number };
   categoryBreakdown: CategoryItem[];
   savingsOpportunity: { suggestion: string } | null;
   savingsRate: number;
   saved: number;
+  toSavings?: number;
 };
 
 export default function InsightsScreen() {
@@ -88,6 +89,7 @@ export default function InsightsScreen() {
         month: t('insights.reportMonth'),
         income: t('insights.reportIncome'),
         expenses: t('insights.reportExpenses'),
+        toSavings: t('insights.reportToSavings'),
         saved: t('insights.reportSaved'),
         total: t('insights.reportTotal'),
         savingsRate: t('insights.reportSavingsRate'),
@@ -234,6 +236,12 @@ export default function InsightsScreen() {
           ) : null}
         </View>
 
+        {report ? (
+          <AppText variant="caption" color={colors.muted} style={[styles.reportHint, headingBlock]}>
+            {t('insights.reportToSavings')}: {formatPKR(report.totals.toSavings ?? 0)}
+          </AppText>
+        ) : null}
+
         <Pressable
           onPress={exportPdf}
           disabled={exporting || !report}
@@ -258,6 +266,7 @@ export default function InsightsScreen() {
         <CardHeader icon="analytics-outline" title={t('insights.monthCompare')} />
         <CompareRow label={t('insights.incomeChange')} value={data?.vsLastMonth?.income ?? 0} formatPKR={formatPKR} colors={colors} />
         <CompareRow label={t('insights.expenseChange')} value={data?.vsLastMonth?.expenses ?? 0} formatPKR={formatPKR} colors={colors} invert />
+        <CompareRow label={t('insights.toSavingsChange')} value={data?.vsLastMonth?.toSavings ?? 0} formatPKR={formatPKR} colors={colors} />
         <CompareRow label={t('insights.savedChange')} value={data?.vsLastMonth?.saved ?? 0} formatPKR={formatPKR} colors={colors} />
       </Card>
 

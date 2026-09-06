@@ -57,7 +57,6 @@ export const EXPENSE_CATEGORIES = [
   'education',
   'subscriptions',
   'personal',
-  'savings',
   'other',
 ] as const;
 

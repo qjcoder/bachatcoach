@@ -150,7 +150,7 @@ export async function uploadLocalFileToDrive(opts: {
   return { fileId };
 }
 
-export async function uploadReceiptToDrive(uri: string, kind: 'expense' | 'income') {
+export async function uploadReceiptToDrive(uri: string, kind: 'expense' | 'income' | 'savings') {
   const folderId = await ensureReceiptsFolderId();
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const { fileId } = await uploadLocalFileToDrive({

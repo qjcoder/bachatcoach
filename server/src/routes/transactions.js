@@ -85,7 +85,15 @@ router.patch('/:id', async (req, res, next) => {
     const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
     if (!transaction) return res.status(404).json({ message: 'Transaction not found' });
 
-    const { amount, category, paymentMethod, note, customCategory, date, receiptImage } = req.body;
+    const { type, amount, category, paymentMethod, note, customCategory, date, receiptImage } = req.body;
+
+    if (type != null) {
+      if (!['expense', 'income', 'savings'].includes(type)) {
+        return res.status(400).json({ message: 'Invalid transaction type' });
+      }
+      transaction.type = type;
+      if (type === 'savings') transaction.category = 'savings';
+    }
 
     if (amount != null) {
       const nextAmount = Number(amount);
@@ -95,7 +103,7 @@ router.patch('/:id', async (req, res, next) => {
       transaction.amount = nextAmount;
     }
 
-    if (category != null) transaction.category = category;
+    if (category != null && transaction.type !== 'savings') transaction.category = category;
     if (paymentMethod != null) transaction.paymentMethod = paymentMethod;
     if (note != null) transaction.note = note;
     if (date) transaction.date = new Date(date);
@@ -106,7 +114,7 @@ router.patch('/:id', async (req, res, next) => {
       if ((nextCategory === 'other' || nextCategory === 'other_income') && !trimmedCustom) {
         return res.status(400).json({ message: 'Custom category is required for Other' });
       }
-      transaction.customCategory = trimmedCustom;
+      transaction.customCategory = transaction.type === 'savings' ? '' : trimmedCustom;
     }
 
     if (receiptImage) {
@@ -129,9 +137,13 @@ router.post('/', async (req, res, next) => {
     if (!type || amount == null) {
       return res.status(400).json({ message: 'Type and amount are required' });
     }
+    if (!['expense', 'income', 'savings'].includes(type)) {
+      return res.status(400).json({ message: 'Invalid transaction type' });
+    }
 
     const trimmedCustom = typeof customCategory === 'string' ? customCategory.trim() : '';
-    if ((category === 'other' || category === 'other_income') && !trimmedCustom) {
+    const resolvedCategory = type === 'savings' ? 'savings' : category;
+    if ((resolvedCategory === 'other' || resolvedCategory === 'other_income') && !trimmedCustom) {
       return res.status(400).json({ message: 'Custom category is required for Other' });
     }
 
@@ -141,10 +153,10 @@ router.post('/', async (req, res, next) => {
       user: req.userId,
       type,
       amount,
-      category,
-      paymentMethod,
+      category: resolvedCategory,
+      paymentMethod: type === 'income' ? undefined : paymentMethod || 'cash',
       note,
-      customCategory: trimmedCustom,
+      customCategory: type === 'savings' ? '' : trimmedCustom,
       date: date ? new Date(date) : new Date(),
       receiptImage: receiptRef,
     });

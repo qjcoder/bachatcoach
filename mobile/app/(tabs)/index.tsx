@@ -30,6 +30,7 @@ import { normalizeLanguage } from '@/lib/language';
 type DashboardSummary = {
   income: number;
   expenses: number;
+  toSavings?: number;
   saved: number;
   savingsRate: number;
   vsLastMonth: { saved: number };
@@ -127,14 +128,23 @@ export default function HomeScreen() {
           <StatCard label={t('dashboard.expenses')} value={formatPKR(summary?.expenses ?? 0)} accent={Brand.danger} iconName="arrow-up-circle-outline" />
         </RTLRow>
 
+        <View style={styles.row}>
+          <StatCard
+            label={t('dashboard.toSavings')}
+            value={formatPKR(summary?.toSavings ?? 0)}
+            accent={Brand.secondary}
+            iconName="wallet-outline"
+          />
+        </View>
+
         <SectionHeader title={t('dashboard.quickAdd')} />
-        <RTLRow style={styles.quickRow} gap={12}>
+        <RTLRow style={styles.quickRow} gap={8}>
           <Pressable
             style={[styles.quickBtn, styles.expenseBtn]}
             onPress={() => router.push({ pathname: '/add-transaction', params: { type: 'expense' } })}>
-            <RTLRow gap={8} style={styles.quickBtnInner}>
-              <Ionicons name="remove-circle" size={22} color="#fff" />
-              <AppText variant="bodySmallBold" color="#FFFFFF" style={styles.quickBtnLabel}>
+            <RTLRow gap={6} style={styles.quickBtnInner}>
+              <Ionicons name="remove-circle" size={20} color="#fff" />
+              <AppText variant="captionBold" color="#FFFFFF" style={styles.quickBtnLabel} numberOfLines={1}>
                 {t('dashboard.addExpense')}
               </AppText>
             </RTLRow>
@@ -142,10 +152,20 @@ export default function HomeScreen() {
           <Pressable
             style={[styles.quickBtn, styles.incomeBtn]}
             onPress={() => router.push({ pathname: '/add-transaction', params: { type: 'income' } })}>
-            <RTLRow gap={8} style={styles.quickBtnInner}>
-              <Ionicons name="add-circle" size={22} color="#fff" />
-              <AppText variant="bodySmallBold" color="#FFFFFF" style={styles.quickBtnLabel}>
+            <RTLRow gap={6} style={styles.quickBtnInner}>
+              <Ionicons name="add-circle" size={20} color="#fff" />
+              <AppText variant="captionBold" color="#FFFFFF" style={styles.quickBtnLabel} numberOfLines={1}>
                 {t('dashboard.addIncome')}
+              </AppText>
+            </RTLRow>
+          </Pressable>
+          <Pressable
+            style={[styles.quickBtn, styles.savingsBtn]}
+            onPress={() => router.push({ pathname: '/add-transaction', params: { type: 'savings' } })}>
+            <RTLRow gap={6} style={styles.quickBtnInner}>
+              <Ionicons name="wallet" size={20} color="#fff" />
+              <AppText variant="captionBold" color="#FFFFFF" style={styles.quickBtnLabel} numberOfLines={1}>
+                {t('dashboard.addSavings')}
               </AppText>
             </RTLRow>
           </Pressable>
@@ -263,6 +283,7 @@ const styles = StyleSheet.create({
   quickBtnLabel: { flex: 1 },
   expenseBtn: { backgroundColor: Brand.danger },
   incomeBtn: { backgroundColor: Brand.primary },
+  savingsBtn: { backgroundColor: Brand.secondary },
   goalCard: { marginBottom: 10 },
   goalRow: { marginBottom: 10, alignItems: 'center', width: '100%' },
   goalIconSlot: { flexShrink: 0 },

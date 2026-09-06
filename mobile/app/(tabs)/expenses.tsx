@@ -26,7 +26,7 @@ import { hasReceipt } from '@/lib/googleDrive';
 
 type Transaction = {
   _id: string;
-  type: 'expense' | 'income';
+  type: 'expense' | 'income' | 'savings';
   amount: number;
   category?: string;
   customCategory?: string;
@@ -35,6 +35,37 @@ type Transaction = {
   date: string;
   receiptImage?: string;
 };
+
+function isSavingsTxn(item: Pick<Transaction, 'type' | 'category'>) {
+  return item.type === 'savings' || (item.type === 'expense' && item.category === 'savings');
+}
+
+function txnTint(item: Pick<Transaction, 'type' | 'category'>) {
+  if (item.type === 'income') return Brand.primary;
+  if (isSavingsTxn(item)) return Brand.secondary;
+  return Brand.danger;
+}
+
+function editLabelFor(item: Transaction, t: (key: string) => string) {
+  if (item.type === 'income') return t('expenses.editIncome');
+  if (isSavingsTxn(item)) return t('expenses.editSavings');
+  return t('expenses.editExpense');
+}
+
+function openEditParams(item: Transaction) {
+  const type = isSavingsTxn(item) ? 'savings' : item.type;
+  return {
+    type,
+    id: item._id,
+    amount: String(item.amount ?? ''),
+    category: item.category || '',
+    customCategory: item.customCategory || '',
+    paymentMethod: item.paymentMethod || '',
+    note: item.note || '',
+    date: item.date || '',
+    receiptImage: item.receiptImage || '',
+  };
+}
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   food: 'restaurant-outline',
@@ -57,20 +88,6 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 const PERIOD_TABS: TransactionPeriod[] = ['today', 'week', 'month', 'year'];
-
-function openEditParams(item: Transaction) {
-  return {
-    type: item.type,
-    id: item._id,
-    amount: String(item.amount ?? ''),
-    category: item.category || '',
-    customCategory: item.customCategory || '',
-    paymentMethod: item.paymentMethod || '',
-    note: item.note || '',
-    date: item.date || '',
-    receiptImage: item.receiptImage || '',
-  };
-}
 
 export default function ExpensesScreen() {
   const { t, i18n } = useTranslation();
@@ -115,21 +132,23 @@ export default function ExpensesScreen() {
     label: t(`expenses.filter${key.charAt(0).toUpperCase()}${key.slice(1)}`),
   }));
 
-  const { totalIn, totalOut } = useMemo(
+  const { totalIn, totalOut, totalSaved } = useMemo(
     () =>
       items.reduce(
         (acc, item) => {
           if (item.type === 'income') acc.totalIn += item.amount;
+          else if (isSavingsTxn(item)) acc.totalSaved += item.amount;
           else acc.totalOut += item.amount;
           return acc;
         },
-        { totalIn: 0, totalOut: 0 }
+        { totalIn: 0, totalOut: 0, totalSaved: 0 }
       ),
     [items]
   );
 
   const selectedIsIncome = selected?.type === 'income';
-  const selectedTint = selectedIsIncome ? Brand.primary : Brand.danger;
+  const selectedIsSavings = selected ? isSavingsTxn(selected) : false;
+  const selectedTint = selected ? txnTint(selected) : Brand.danger;
   const selectedReceiptDrive = selected?.receiptImage?.startsWith('drive:') ?? false;
   const selectedHasReceipt = hasReceipt(selected?.receiptImage);
 
@@ -149,7 +168,7 @@ export default function ExpensesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <RTLRow style={styles.actions} gap={10}>
+      <RTLRow style={styles.actions} gap={8}>
         <Button
           title={t('expenses.addExpense')}
           onPress={() => router.push({ pathname: '/add-transaction', params: { type: 'expense' } })}
@@ -161,13 +180,19 @@ export default function ExpensesScreen() {
           variant="outline"
           style={styles.btn}
         />
+        <Button
+          title={t('expenses.addSavings')}
+          onPress={() => router.push({ pathname: '/add-transaction', params: { type: 'savings' } })}
+          variant="outline"
+          style={styles.btn}
+        />
       </RTLRow>
 
       <View style={styles.filters}>
         <SegmentedTabs tabs={periodTabs} active={period} onChange={setPeriod} />
       </View>
 
-      <RTLRow style={styles.summary} gap={12}>
+      <RTLRow style={styles.summary} gap={10}>
         <StatCard
           label={t('expenses.totalIn')}
           value={formatPKR(totalIn)}
@@ -181,6 +206,14 @@ export default function ExpensesScreen() {
           iconName="arrow-up-circle-outline"
         />
       </RTLRow>
+      <View style={styles.summarySingle}>
+        <StatCard
+          label={t('expenses.totalSaved')}
+          value={formatPKR(totalSaved)}
+          accent={Brand.secondary}
+          iconName="wallet-outline"
+        />
+      </View>
 
       <FlatList
         style={styles.list}
@@ -204,23 +237,29 @@ export default function ExpensesScreen() {
         }
         renderItem={({ item }) => {
           const isIncome = item.type === 'income';
-          const iconName = CATEGORY_ICONS[item.category || ''] || 'ellipse-outline';
-          const tint = isIncome ? Brand.primary : Brand.danger;
+          const savings = isSavingsTxn(item);
+          const iconName = savings
+            ? 'wallet-outline'
+            : CATEGORY_ICONS[item.category || ''] || 'ellipse-outline';
+          const tint = txnTint(item);
           const attached = hasReceipt(item.receiptImage);
+          const title = savings
+            ? t('expenses.savingsTransfer')
+            : getCategoryLabel(item.category, item.customCategory, t);
           return (
             <ListCard
               icon={iconName}
               iconColor={tint}
               iconBg={`${tint}12`}
-              title={getCategoryLabel(item.category, item.customCategory, t)}
+              title={title}
               subtitle={item.note || undefined}
               meta={`${formatTransactionDate(item.date, i18n.language)} · ${formatTransactionTime(item.date, i18n.language)}${attached ? ' · 📎' : ''}`}
               onPress={() => setSelected(item)}
               onEdit={() => goEdit(item)}
-              editLabel={isIncome ? t('expenses.editIncome') : t('expenses.editExpense')}
+              editLabel={editLabelFor(item, t)}
               trailing={
                 <AppText variant="amountSm" color={tint}>
-                  {isIncome ? '+' : '−'}
+                  {isIncome ? '+' : savings ? '→' : '−'}
                   {formatPKR(item.amount)}
                 </AppText>
               }
@@ -238,25 +277,35 @@ export default function ExpensesScreen() {
             <View style={[styles.detailHero, { backgroundColor: `${selectedTint}12` }]}>
               <View style={[styles.detailIcon, { backgroundColor: `${selectedTint}18` }]}>
                 <Ionicons
-                  name={CATEGORY_ICONS[selected.category || ''] || 'ellipse-outline'}
+                  name={
+                    selectedIsSavings
+                      ? 'wallet-outline'
+                      : CATEGORY_ICONS[selected.category || ''] || 'ellipse-outline'
+                  }
                   size={26}
                   color={selectedTint}
                 />
               </View>
               <AppText variant="captionBold" color={selectedTint}>
-                {selectedIsIncome ? t('expenses.income') : t('expenses.expense')}
+                {selectedIsSavings
+                  ? t('expenses.savingsTransfer')
+                  : selectedIsIncome
+                    ? t('expenses.income')
+                    : t('expenses.expense')}
               </AppText>
               <AppText variant="amount" color={selectedTint} style={styles.detailAmount}>
-                {selectedIsIncome ? '+' : '−'}
+                {selectedIsIncome ? '+' : selectedIsSavings ? '→' : '−'}
                 {formatPKR(selected.amount)}
               </AppText>
             </View>
 
-            <DetailRow
-              label={t('expenses.category')}
-              value={getCategoryLabel(selected.category, selected.customCategory, t)}
-              colors={colors}
-            />
+            {!selectedIsSavings ? (
+              <DetailRow
+                label={t('expenses.category')}
+                value={getCategoryLabel(selected.category, selected.customCategory, t)}
+                colors={colors}
+              />
+            ) : null}
             <DetailRow
               label={t('expenses.date')}
               value={formatTransactionDate(selected.date, i18n.language)}
@@ -309,7 +358,7 @@ export default function ExpensesScreen() {
             <RTLRow style={styles.detailActions} gap={10}>
               <Button title={t('common.cancel')} onPress={closeDetails} variant="outline" style={{ flex: 1 }} />
               <Button
-                title={selectedIsIncome ? t('expenses.editIncome') : t('expenses.editExpense')}
+                title={editLabelFor(selected, t)}
                 onPress={() => goEdit(selected)}
                 style={{ flex: 1 }}
               />
@@ -377,6 +426,7 @@ const styles = StyleSheet.create({
   actions: { padding: Spacing.md, paddingBottom: Spacing.sm },
   filters: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   summary: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
+  summarySingle: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   btn: { flex: 1, paddingVertical: 12 },
   detailHero: {
     alignItems: 'center',

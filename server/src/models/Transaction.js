@@ -11,7 +11,7 @@ export const EXPENSE_CATEGORIES = [
   'education',
   'subscriptions',
   'personal',
-  'savings',
+  'savings', // legacy; new deposits use type: 'savings'
   'other',
 ];
 
@@ -20,7 +20,7 @@ export const PAYMENT_METHODS = ['cash', 'bank', 'jazzcash', 'easypaisa', 'card']
 const transactionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    type: { type: String, enum: ['expense', 'income'], required: true },
+    type: { type: String, enum: ['expense', 'income', 'savings'], required: true },
     amount: { type: Number, required: true, min: 0 },
     category: {
       type: String,

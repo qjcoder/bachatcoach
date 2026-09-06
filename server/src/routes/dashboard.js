@@ -39,6 +39,28 @@ function contactBalance(c) {
   return total;
 }
 
+/** True spending (excludes legacy expense+category savings). */
+function isSpendingExpense(doc) {
+  return doc.type === 'expense' && doc.category !== 'savings';
+}
+
+/** Savings deposit: new type or legacy expense marked savings. */
+function isSavingsTransfer(doc) {
+  return doc.type === 'savings' || (doc.type === 'expense' && doc.category === 'savings');
+}
+
+function sumByKind(rows) {
+  let income = 0;
+  let expenses = 0;
+  let toSavings = 0;
+  for (const r of rows) {
+    if (r.type === 'income') income += r.amount;
+    else if (isSavingsTransfer(r)) toSavings += r.amount;
+    else if (isSpendingExpense(r)) expenses += r.amount;
+  }
+  return { income, expenses, toSavings };
+}
+
 router.get('/summary', async (req, res, next) => {
   try {
     const userId = userObjectId(req);
@@ -51,7 +73,6 @@ router.get('/summary', async (req, res, next) => {
     const prevYear = month === 1 ? year - 1 : year;
     const prevRange = monthRange(prevMonth, prevYear);
 
-    // One Transaction aggregation + lean contact/goal reads (Atlas M0 friendly).
     const [txFacet, lentContacts, borrowedContacts, goals] = await Promise.all([
       Transaction.aggregate([
         {
@@ -64,14 +85,20 @@ router.get('/summary', async (req, res, next) => {
           $facet: {
             current: [
               { $match: { date: { $gte: start, $lt: end } } },
-              { $group: { _id: '$type', total: { $sum: '$amount' } } },
+              { $project: { type: 1, category: 1, amount: 1 } },
             ],
             previous: [
               { $match: { date: { $gte: prevRange.start, $lt: prevRange.end } } },
-              { $group: { _id: '$type', total: { $sum: '$amount' } } },
+              { $project: { type: 1, category: 1, amount: 1 } },
             ],
             categoryBreakdown: [
-              { $match: { type: 'expense', date: { $gte: start, $lt: end } } },
+              {
+                $match: {
+                  type: 'expense',
+                  category: { $ne: 'savings' },
+                  date: { $gte: start, $lt: end },
+                },
+              },
               { $group: { _id: '$category', total: { $sum: '$amount' } } },
               { $sort: { total: -1 } },
             ],
@@ -88,19 +115,16 @@ router.get('/summary', async (req, res, next) => {
     ]);
 
     const facet = txFacet[0] || {};
-    const current = facet.current || [];
-    const previous = facet.previous || [];
+    const current = sumByKind(facet.current || []);
+    const previous = sumByKind(facet.previous || []);
     const categoryBreakdown = facet.categoryBreakdown || [];
 
-    const income = current.find((r) => r._id === 'income')?.total || 0;
-    const expenses = current.find((r) => r._id === 'expense')?.total || 0;
-    const prevIncome = previous.find((r) => r._id === 'income')?.total || 0;
-    const prevExpenses = previous.find((r) => r._id === 'expense')?.total || 0;
+    const { income, expenses, toSavings } = current;
     const saved = income - expenses;
-    const prevSaved = prevIncome - prevExpenses;
+    const prevSaved = previous.income - previous.expenses;
     const savingsRate = income > 0 ? Math.round((saved / income) * 100) : 0;
 
-    const lang = req.query.lang === 'ur' ? 'ur' : 'en'; // roman uses English quotes & tips
+    const lang = req.query.lang === 'ur' ? 'ur' : 'en';
     const dailyQuote = getDailyQuote(lang);
 
     const totalLent = lentContacts.reduce((sum, c) => sum + contactBalance(c), 0);
@@ -123,11 +147,13 @@ router.get('/summary', async (req, res, next) => {
       year,
       income,
       expenses,
+      toSavings,
       saved,
       savingsRate,
       vsLastMonth: {
-        income: income - prevIncome,
-        expenses: expenses - prevExpenses,
+        income: income - previous.income,
+        expenses: expenses - previous.expenses,
+        toSavings: toSavings - previous.toSavings,
         saved: saved - prevSaved,
       },
       categoryBreakdown,
@@ -169,6 +195,7 @@ router.get('/monthly-report', async (req, res, next) => {
           _id: {
             month: { $month: '$date' },
             type: '$type',
+            category: '$category',
           },
           total: { $sum: '$amount' },
         },
@@ -177,18 +204,27 @@ router.get('/monthly-report', async (req, res, next) => {
 
     const months = Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
-      const income = rows.find((r) => r._id.month === month && r._id.type === 'income')?.total || 0;
-      const expenses = rows.find((r) => r._id.month === month && r._id.type === 'expense')?.total || 0;
-      return { month, income, expenses, saved: income - expenses };
+      const monthRows = rows.filter((r) => r._id.month === month);
+      let income = 0;
+      let expenses = 0;
+      let toSavings = 0;
+      for (const r of monthRows) {
+        const doc = { type: r._id.type, category: r._id.category, amount: r.total };
+        if (doc.type === 'income') income += doc.amount;
+        else if (isSavingsTransfer(doc)) toSavings += doc.amount;
+        else if (isSpendingExpense(doc)) expenses += doc.amount;
+      }
+      return { month, income, expenses, toSavings, saved: income - expenses };
     });
 
     const totals = months.reduce(
       (acc, m) => ({
         income: acc.income + m.income,
         expenses: acc.expenses + m.expenses,
+        toSavings: acc.toSavings + m.toSavings,
         saved: acc.saved + m.saved,
       }),
-      { income: 0, expenses: 0, saved: 0 }
+      { income: 0, expenses: 0, toSavings: 0, saved: 0 }
     );
 
     res.json({ year, months, totals });

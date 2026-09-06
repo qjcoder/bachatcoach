@@ -13,7 +13,8 @@ const sourcePath = join(outDir, 'logo-source.jpg');
 const iconSourcePath = join(outDir, 'icon-source.jpg');
 
 const SPLASH_BG = '#000000';
-const ANDROID_BG = '#000000';
+const ANDROID_BG = '#FFFFFF';
+const ICON_BG = '#FFFFFF';
 
 async function main() {
   let sharp;
@@ -57,8 +58,8 @@ async function main() {
 
   const iconBuffer = existsSync(iconSourcePath)
     ? await sharp(iconSourcePath)
-        .resize(1024, 1024, { fit: 'contain', background: '#000000' })
-        .flatten({ background: '#000000' })
+        .resize(1024, 1024, { fit: 'contain', background: '#FFFFFF' })
+        .flatten({ background: '#FFFFFF' })
         .png()
         .toBuffer()
     : await sharp(sourcePath)
@@ -166,11 +167,11 @@ async function main() {
   }
 
   const assets = [
-    { name: 'icon.png', buf: () => resizeIcon(1024, 1024, { pad: 0.06, bg: SPLASH_BG }) },
+    { name: 'icon.png', buf: () => resizeIcon(1024, 1024, { pad: 0.04, bg: ICON_BG }) },
     { name: 'splash-icon.png', buf: () => resizeIcon(288, 288) },
     { name: 'splash-logo.png', buf: () => splashLogoAsset() },
-    { name: 'favicon.png', buf: () => resizeIcon(48, 48) },
-    { name: 'android-icon-foreground.png', buf: () => resizeIcon(432, 432, { pad: 0.14 }) },
+    { name: 'favicon.png', buf: () => resizeIcon(48, 48, { pad: 0.04, bg: ICON_BG }) },
+    { name: 'android-icon-foreground.png', buf: () => resizeIcon(432, 432, { pad: 0.12 }) },
     {
       name: 'android-icon-background.png',
       buf: () =>
@@ -182,20 +183,20 @@ async function main() {
     },
     {
       name: 'android-icon-monochrome.png',
-      buf: () =>
-        sharp(iconBuffer)
-          .resize(320, 320, { fit: 'contain' })
-          .negate({ alpha: false })
+      buf: async () => {
+        const mono = await sharp(iconBuffer)
+          .resize(320, 320, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+          .greyscale()
+          .threshold(200)
           .png()
-          .toBuffer()
-          .then((mono) =>
-            sharp({
-              create: { width: 432, height: 432, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } },
-            })
-              .composite([{ input: mono, gravity: 'centre' }])
-              .png()
-              .toBuffer()
-          ),
+          .toBuffer();
+        return sharp({
+          create: { width: 432, height: 432, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+        })
+          .composite([{ input: mono, gravity: 'centre' }])
+          .png()
+          .toBuffer();
+      },
     },
     { name: 'splash.png', buf: () => splashWithLogo(1284, 2778) },
     { name: 'splash-tablet.png', buf: () => splashWithLogo(2048, 2732) },
