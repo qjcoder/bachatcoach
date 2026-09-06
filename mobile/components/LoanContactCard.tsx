@@ -1,75 +1,103 @@
-import { View, StyleSheet, Pressable, ActivityIndicator, type ReactNode } from 'react-native';
+import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
-import { Card } from '@/components/Card';
 import { RTLRow } from '@/components/RTLRow';
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
 import { Brand, Radius } from '@/constants/theme';
 import { useLayoutScale } from '@/lib/layout';
 
+const AVATAR_COLORS = ['#10B981', '#3B82F6', '#EAB308', '#A78BFA', '#F97316', '#EC4899'] as const;
+
+export function avatarColorForName(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash + name.charCodeAt(i) * (i + 1)) % 997;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+export function initialsForName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+}
+
+type LoanStatus = 'active' | 'repaid' | 'overdue';
+
 type LoanContactCardProps = {
   name: string;
-  phone?: string;
+  purpose?: string;
   amount: string;
+  openedLabel: string;
+  dueLabel?: string;
+  status: LoanStatus;
+  statusLabel: string;
   tint: string;
-  actions: ReactNode;
   onPress?: () => void;
+  onLongPress?: () => void;
 };
 
-export function LoanContactCard({ name, phone, amount, tint, actions, onPress }: LoanContactCardProps) {
-  const colors = Colors[useColorScheme() ?? 'light'];
+export function LoanContactCard({
+  name,
+  purpose,
+  amount,
+  openedLabel,
+  dueLabel,
+  status,
+  statusLabel,
+  tint,
+  onPress,
+  onLongPress,
+}: LoanContactCardProps) {
   const { s } = useLayoutScale();
-  const iconSize = s(44);
-
-  const body = (
-    <>
-      <RTLRow style={styles.topRow} gap={10}>
-        <View
-          style={[
-            styles.iconWrap,
-            { backgroundColor: `${tint}12`, width: iconSize, height: iconSize, borderRadius: s(14) },
-          ]}>
-          <Ionicons name="person" size={s(20)} color={tint} />
-        </View>
-        <View style={styles.info}>
-          <AppText variant="bodySemibold" color={colors.text} shrink numberOfLines={1} style={styles.name}>
-            {name}
-          </AppText>
-          {phone ? (
-            <AppText variant="caption" color={colors.muted} shrink numberOfLines={1} style={styles.phone}>
-              {phone}
-            </AppText>
-          ) : null}
-        </View>
-        {onPress ? <Ionicons name="chevron-forward" size={s(18)} color={colors.muted} /> : null}
-      </RTLRow>
-
-      <AppText
-        variant="amountMd"
-        color={tint}
-        shrink
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
-        style={styles.amount}>
-        {amount}
-      </AppText>
-    </>
-  );
+  const avatarBg = avatarColorForName(name);
+  const statusColor =
+    status === 'overdue' ? Brand.danger : status === 'repaid' ? Brand.secondary : tint;
 
   return (
-    <Card variant="elevated" style={styles.card}>
-      {onPress ? (
-        <Pressable onPress={onPress} accessibilityRole="button">
-          {body}
-        </Pressable>
-      ) : (
-        body
-      )}
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.row, pressed && { opacity: 0.88 }]}>
+      <View style={[styles.avatar, { backgroundColor: avatarBg, width: s(44), height: s(44) }]}>
+        <AppText variant="bodySemibold" color="#FFFFFF">
+          {initialsForName(name)}
+        </AppText>
+      </View>
 
-      <View style={[styles.actions, { borderTopColor: colors.border }]}>{actions}</View>
-    </Card>
+      <View style={styles.mid}>
+        <AppText variant="bodySemibold" color="#FFFFFF" numberOfLines={1}>
+          {name}
+        </AppText>
+        {purpose ? (
+          <AppText variant="caption" color="rgba(255,255,255,0.55)" numberOfLines={1}>
+            {purpose}
+          </AppText>
+        ) : null}
+        <AppText variant="caption" color="rgba(255,255,255,0.42)" numberOfLines={1} style={styles.metaLine}>
+          {openedLabel}
+        </AppText>
+        {dueLabel ? (
+          <RTLRow gap={4} style={styles.dueRow}>
+            <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.42)" />
+            <AppText variant="caption" color="rgba(255,255,255,0.42)" numberOfLines={1}>
+              {dueLabel}
+            </AppText>
+          </RTLRow>
+        ) : null}
+      </View>
+
+      <View style={styles.right}>
+        <AppText variant="bodySemibold" color="#FFFFFF" numberOfLines={1} style={styles.amount}>
+          {amount}
+        </AppText>
+        <View style={[styles.badge, { borderColor: `${statusColor}88` }]}>
+          <AppText variant="captionBold" color={statusColor}>
+            {statusLabel}
+          </AppText>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" style={styles.chevron} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -126,35 +154,32 @@ export function LoanActionButton({
 }
 
 const styles = StyleSheet.create({
-  card: { marginBottom: 12, padding: 12, width: '100%', overflow: 'hidden' },
-  topRow: { alignItems: 'center', width: '100%' },
-  iconWrap: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  avatar: {
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  info: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
+  mid: { flex: 1, minWidth: 0, gap: 2 },
+  metaLine: { marginTop: 4 },
+  dueRow: { alignItems: 'center', marginTop: 2 },
+  right: { alignItems: 'flex-end', gap: 6, flexShrink: 0, maxWidth: '42%' },
+  amount: { writingDirection: 'ltr' },
+  badge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  name: { width: '100%' },
-  phone: {
-    marginTop: 2,
-    width: '100%',
-    writingDirection: 'ltr',
-  },
-  amount: {
-    marginTop: 10,
-    width: '100%',
-    writingDirection: 'ltr',
-  },
-  actions: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    width: '100%',
-  },
+  chevron: { marginTop: 2 },
   actionBtn: {
     flex: 1,
     minWidth: 0,
@@ -172,8 +197,5 @@ const styles = StyleSheet.create({
     gap: 4,
     maxWidth: '100%',
   },
-  actionLabel: {
-    flexShrink: 1,
-    minWidth: 0,
-  },
+  actionLabel: { flexShrink: 1, minWidth: 0 },
 });

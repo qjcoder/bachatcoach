@@ -95,8 +95,14 @@ function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
                 name="add-transaction"
                 options={{
                   presentation: 'modal',
-                  title: t('expenses.addExpense'),
-                  ...headerOptions,
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name="add-loan"
+                options={{
+                  presentation: 'modal',
+                  headerShown: false,
                 }}
               />
               <Stack.Screen
@@ -105,7 +111,12 @@ function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
               />
               <Stack.Screen
                 name="goals"
-                options={{ title: t('goals.title'), ...headerOptions }}
+                options={{
+                  title: t('goals.title'),
+                  ...headerOptions,
+                  headerStyle: { backgroundColor: '#78350F' },
+                  headerTintColor: '#FFFFFF',
+                }}
               />
             </Stack>
           </LockGate>

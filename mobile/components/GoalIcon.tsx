@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Brand } from '@/constants/theme';
+import { TxnKind } from '@/constants/theme';
 
 export type GoalIconKey =
   | 'target'
@@ -59,7 +59,7 @@ export function GoalIcon({ icon, size = 24, variant = 'circle' }: GoalIconProps)
   const iconSize = variant === 'circle' ? size * 0.55 : size;
 
   const glyph = (
-    <Ionicons name={meta.ion} size={iconSize} color={Brand.primary} />
+    <Ionicons name={meta.ion} size={iconSize} color={TxnKind.savings} />
   );
 
   if (variant === 'plain') return glyph;
@@ -85,7 +85,7 @@ export function normalizeGoalIcon(icon?: string): string {
 
 const styles = StyleSheet.create({
   circle: {
-    backgroundColor: `${Brand.primary}14`,
+    backgroundColor: `${TxnKind.savings}14`,
     alignItems: 'center',
     justifyContent: 'center',
   },

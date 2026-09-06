@@ -28,6 +28,8 @@ const userSchema = new mongoose.Schema(
       default: 'off',
     },
     lastBackupAt: { type: Date, default: null },
+    /** When set, account is in a 7-day recovery window before permanent wipe. */
+    deletionScheduledAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

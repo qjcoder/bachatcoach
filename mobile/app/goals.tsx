@@ -33,6 +33,9 @@ type Goal = {
 
 const GOAL_ICONS = GOAL_ICON_OPTIONS.map((o) => o.key);
 
+const SAVINGS = Brand.secondary;
+const SAVINGS_BTN = Brand.secondarySoft;
+
 export default function GoalsScreen() {
   const { t, i18n } = useTranslation();
   const { showAlert } = useDialog();
@@ -79,6 +82,7 @@ export default function GoalsScreen() {
     setTitle('');
     setTitleUr('');
     setTargetAmount('');
+    setSelectedIcon('target');
     await load();
   };
 
@@ -96,7 +100,12 @@ export default function GoalsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background, direction: layoutDirection }]}>
       <View style={styles.header}>
-        <Button title={t('goals.addGoal')} onPress={() => setModalVisible(true)} style={styles.addBtn} />
+        <Button
+          title={t('goals.addGoal')}
+          onPress={() => setModalVisible(true)}
+          variant="secondary"
+          style={{ ...styles.addBtn, backgroundColor: SAVINGS_BTN }}
+        />
       </View>
 
       <FlatList
@@ -111,7 +120,7 @@ export default function GoalsScreen() {
               await load(true);
               setRefreshing(false);
             }}
-            tintColor={Brand.primary}
+            tintColor={SAVINGS}
           />
         }
         ListEmptyComponent={<EmptyState icon="flag-outline" title={t('goals.noGoals')} />}
@@ -131,20 +140,26 @@ export default function GoalsScreen() {
                     {formatPKR(item.currentAmount)} / {formatPKR(item.targetAmount)}
                   </AppText>
                 </View>
-                <AppText variant="amountMd" color={Brand.primary} align="center" shrink style={styles.goalPct}>
+                <AppText variant="amountMd" color={SAVINGS} align="center" shrink style={styles.goalPct}>
                   {pct}%
                 </AppText>
               </RTLRow>
-              <ProgressBar progress={pct} height={12} />
+              <ProgressBar progress={pct} height={12} color={SAVINGS} />
               <Pressable onPress={() => setContributeModal(item)} style={styles.contributeBtn}>
-                <AppText variant="bodySmallBold" color={Brand.primary}>+ {t('goals.contribute')}</AppText>
+                <AppText variant="bodySmallBold" color={SAVINGS}>
+                  + {t('goals.contribute')}
+                </AppText>
               </Pressable>
             </Card>
           );
         }}
       />
 
-      <BottomSheet visible={modalVisible} title={t('goals.addGoal')} onClose={() => setModalVisible(false)}>
+      <BottomSheet
+        visible={modalVisible}
+        title={t('goals.addGoal')}
+        onClose={() => setModalVisible(false)}
+        accentColor={SAVINGS}>
         <RTLRow style={styles.iconRow} gap={8}>
           {GOAL_ICONS.map((iconKey) => (
             <Pressable
@@ -159,19 +174,44 @@ export default function GoalsScreen() {
             </Pressable>
           ))}
         </RTLRow>
-        <TextField label={t('goals.titleEn')} icon="flag-outline" value={title} onChangeText={setTitle} />
-        <TextField label={t('goals.titleUr')} icon="language-outline" value={titleUr} onChangeText={setTitleUr} />
-        <TextField label={t('goals.targetAmount')} icon="cash-outline" value={targetAmount} onChangeText={setTargetAmount} keyboardType="numeric" />
+        <TextField
+          label={t('goals.titleEn')}
+          icon="flag-outline"
+          value={title}
+          onChangeText={setTitle}
+          accent={SAVINGS}
+        />
+        <TextField
+          label={t('goals.titleUr')}
+          icon="language-outline"
+          value={titleUr}
+          onChangeText={setTitleUr}
+          accent={SAVINGS}
+        />
+        <TextField
+          label={t('goals.targetAmount')}
+          icon="cash-outline"
+          value={targetAmount}
+          onChangeText={setTargetAmount}
+          keyboardType="numeric"
+          accent={SAVINGS}
+        />
         <RTLRow style={styles.modalActions} gap={10}>
-          <Button title={t('common.cancel')} onPress={() => setModalVisible(false)} variant="outline" style={{ flex: 1 }} />
-          <Button title={t('common.save')} onPress={createGoal} style={{ flex: 1 }} />
+          <Button
+            title={t('common.cancel')}
+            onPress={() => setModalVisible(false)}
+            variant="outline"
+            style={{ flex: 1, borderColor: SAVINGS }}
+          />
+          <Button title={t('common.save')} onPress={createGoal} variant="secondary" style={{ flex: 1 }} />
         </RTLRow>
       </BottomSheet>
 
       <BottomSheet
         visible={!!contributeModal}
         title={t('goals.contribute')}
-        onClose={() => setContributeModal(null)}>
+        onClose={() => setContributeModal(null)}
+        accentColor={SAVINGS}>
         <TextField
           label={t('goals.amount')}
           icon="add-circle-outline"
@@ -179,10 +219,16 @@ export default function GoalsScreen() {
           onChangeText={setContributeAmount}
           keyboardType="numeric"
           autoFocus
+          accent={SAVINGS}
         />
         <RTLRow style={styles.modalActions} gap={10}>
-          <Button title={t('common.cancel')} onPress={() => setContributeModal(null)} variant="outline" style={{ flex: 1 }} />
-          <Button title={t('common.save')} onPress={contribute} style={{ flex: 1 }} />
+          <Button
+            title={t('common.cancel')}
+            onPress={() => setContributeModal(null)}
+            variant="outline"
+            style={{ flex: 1, borderColor: SAVINGS }}
+          />
+          <Button title={t('common.save')} onPress={contribute} variant="secondary" style={{ flex: 1 }} />
         </RTLRow>
       </BottomSheet>
     </View>
@@ -206,10 +252,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderRadius: Radius.sm,
-    backgroundColor: `${Brand.primary}10`,
+    backgroundColor: `${Brand.secondary}18`,
   },
   iconRow: { flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   iconChip: { padding: 10, borderRadius: Radius.sm },
-  iconChipActive: { backgroundColor: `${Brand.primary}25`, borderWidth: 2, borderColor: Brand.primary },
+  iconChipActive: {
+    backgroundColor: `${Brand.secondary}25`,
+    borderWidth: 2,
+    borderColor: Brand.secondary,
+  },
   modalActions: { marginTop: 8 },
 });

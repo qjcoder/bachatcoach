@@ -52,6 +52,11 @@ Set `EXPO_PUBLIC_API_URL` in `mobile/.env` if not using localhost (use your mach
 
 See `playstore/LISTING.md` for store descriptions and `playstore/PRIVACY_POLICY.md` for privacy policy text.
 
+### Future (not built yet)
+
+- Shared expenses / Splitwise-style splits: `docs/SHARED_EXPENSES_PLAN.md`
+- Google Drive / OAuth notes: `docs/GOOGLE_SETUP.md`
+
 ### Regenerate app icons
 
 ```bash

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Pressable, View } from 'react-native';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -11,16 +11,21 @@ import { TextField } from '@/components/TextField';
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { Brand } from '@/constants/theme';
 
+const DEMO_EMAIL = 'demo@bachatcoach.app';
+const DEMO_PASSWORD = 'demo123';
+
 export default function LoginScreen() {
   const { t } = useTranslation();
   const { login } = useAuth();
   const { showAlert } = useDialog();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(__DEV__ ? DEMO_EMAIL : '');
+  const [password, setPassword] = useState(__DEV__ ? DEMO_PASSWORD : '');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
+  const handleLogin = async (overrideEmail?: string, overridePassword?: string) => {
+    const nextEmail = (overrideEmail ?? email).trim().toLowerCase();
+    const nextPassword = overridePassword ?? password;
+    if (!nextEmail || !nextPassword) {
       showAlert({
         title: t('common.error'),
         message: 'Please enter email and password',
@@ -30,7 +35,7 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
+      await login(nextEmail, nextPassword);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -40,6 +45,26 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        await login(DEMO_EMAIL, DEMO_PASSWORD);
+      } catch {
+        if (!cancelled) {
+          /* keep fields filled so user can tap Login / Demo */
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <AuthScreen
@@ -85,10 +110,23 @@ export default function LoginScreen() {
       />
       <Button
         title={loading ? t('common.loading') : t('auth.login')}
-        onPress={handleLogin}
+        onPress={() => handleLogin()}
         disabled={loading}
         style={styles.button}
       />
+      {__DEV__ ? (
+        <Button
+          title="Demo account (Ahmed Khan)"
+          onPress={() => {
+            setEmail(DEMO_EMAIL);
+            setPassword(DEMO_PASSWORD);
+            void handleLogin(DEMO_EMAIL, DEMO_PASSWORD);
+          }}
+          disabled={loading}
+          variant="outline"
+          style={styles.demoButton}
+        />
+      ) : null}
     </AuthScreen>
   );
 }
@@ -111,6 +149,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 6,
+  },
+  demoButton: {
+    marginBottom: 8,
+    borderRadius: 16,
   },
   footerRow: {
     flexDirection: 'row',

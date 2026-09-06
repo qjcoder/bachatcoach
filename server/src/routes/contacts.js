@@ -21,8 +21,20 @@ function computeBalance(direction, entries = []) {
   return total;
 }
 
-/** List payload — balance only, no full ledger (ledger comes from /:id/report). */
+/** List payload — balance + display fields for Loans UI (no full ledger). */
 function mapContactListItem(c) {
+  const entries = c.entries || [];
+  const balance = computeBalance(c.direction, entries);
+  const outflowType = c.direction === 'i_lent' ? 'lent' : 'received';
+  const outflows = entries.filter((e) => e.type === outflowType);
+  const sortedDesc = [...outflows].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const sortedAsc = [...outflows].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const lastOutflow = sortedDesc[0];
+  const firstOutflow = sortedAsc[0];
+  const dueDate = c.dueDate || null;
+  const isOverdue =
+    !c.isSettled && balance > 0 && dueDate && new Date(dueDate).getTime() < Date.now();
+
   return {
     _id: c._id,
     name: c.name,
@@ -31,7 +43,12 @@ function mapContactListItem(c) {
     phoneKey: c.phoneKey || '',
     direction: c.direction,
     isSettled: Boolean(c.isSettled),
-    balance: computeBalance(c.direction, c.entries),
+    balance,
+    purpose: String(lastOutflow?.note || '').trim(),
+    openedOn: firstOutflow?.date || c.createdAt,
+    dueDate,
+    isOverdue: Boolean(isOverdue),
+    loanCount: Math.max(outflows.length, !c.isSettled && balance > 0 ? 1 : 0),
     updatedAt: c.updatedAt,
     createdAt: c.createdAt,
   };
@@ -67,6 +84,7 @@ function mapContactReport(contact) {
     phone: contact.phone || '',
     direction,
     balance: contact.balance,
+    dueDate: contact.dueDate || null,
     entries,
     summary: {
       totalOutstanding: contact.balance,
@@ -141,7 +159,9 @@ router.get('/', async (req, res, next) => {
     if (direction) filter.direction = direction;
 
     const contacts = await Contact.find(filter)
-      .select('name nameUr phone phoneKey direction isSettled entries.type entries.amount updatedAt createdAt')
+      .select(
+        'name nameUr phone phoneKey direction isSettled dueDate entries.type entries.amount entries.note entries.date updatedAt createdAt'
+      )
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -167,7 +187,7 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, nameUr, phone, direction, amount, note } = req.body;
+    const { name, nameUr, phone, direction, amount, note, dueDate } = req.body;
     if (!name || !direction) {
       return res.status(400).json({ message: 'Name and direction are required' });
     }
@@ -209,6 +229,7 @@ router.post('/', async (req, res, next) => {
       if (hasAmount) {
         existing.entries.push({ type: entryType, amount: amt, note: note || '' });
       }
+      if (dueDate) existing.dueDate = new Date(dueDate);
       existing.isSettled = existing.balance <= 0;
       await existing.save();
       return res.status(200).json(existing);
@@ -220,6 +241,7 @@ router.post('/', async (req, res, next) => {
       nameUr: nameUr || '',
       phone: String(phone).trim(),
       direction,
+      dueDate: dueDate ? new Date(dueDate) : null,
       entries: hasAmount ? [{ type: entryType, amount: amt, note }] : [],
     });
 
@@ -269,7 +291,7 @@ router.patch('/:id', async (req, res, next) => {
     const contact = await Contact.findOne({ _id: req.params.id, user: req.userId });
     if (!contact) return res.status(404).json({ message: 'Contact not found' });
 
-    const { name, nameUr, phone, amount } = req.body;
+    const { name, nameUr, phone, amount, dueDate } = req.body;
     if (typeof name === 'string' && name.trim()) contact.name = name.trim();
     if (typeof nameUr === 'string') contact.nameUr = nameUr.trim();
     if (typeof phone === 'string') {
@@ -293,6 +315,12 @@ router.patch('/:id', async (req, res, next) => {
         });
       }
       contact.phone = phone.trim();
+    }
+
+    if (dueDate === null || dueDate === '') {
+      contact.dueDate = null;
+    } else if (dueDate) {
+      contact.dueDate = new Date(dueDate);
     }
 
     if (amount != null && amount !== '') {

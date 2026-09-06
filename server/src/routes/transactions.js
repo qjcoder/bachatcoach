@@ -28,6 +28,19 @@ function acceptReceiptRef(value) {
   return value;
 }
 
+function normalizeTags(value) {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value
+        .filter((t) => typeof t === 'string')
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .map((t) => t.slice(0, 32))
+    ),
+  ].slice(0, 12);
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const { type, month, year, category, from, to, limit = 50 } = req.query;
@@ -51,7 +64,7 @@ router.get('/', async (req, res, next) => {
     }
 
     const transactions = await Transaction.find(filter)
-      .select('type amount category customCategory paymentMethod note date receiptImage')
+      .select('type amount category customCategory paymentMethod note tags date receiptImage')
       .sort({ date: -1 })
       .limit(Number(limit))
       .lean();
@@ -85,7 +98,7 @@ router.patch('/:id', async (req, res, next) => {
     const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
     if (!transaction) return res.status(404).json({ message: 'Transaction not found' });
 
-    const { type, amount, category, paymentMethod, note, customCategory, date, receiptImage } = req.body;
+    const { type, amount, category, paymentMethod, note, tags, customCategory, date, receiptImage } = req.body;
 
     if (type != null) {
       if (!['expense', 'income', 'savings'].includes(type)) {
@@ -106,6 +119,9 @@ router.patch('/:id', async (req, res, next) => {
     if (category != null && transaction.type !== 'savings') transaction.category = category;
     if (paymentMethod != null) transaction.paymentMethod = paymentMethod;
     if (note != null) transaction.note = note;
+    if (tags != null) {
+      transaction.tags = normalizeTags(tags);
+    }
     if (date) transaction.date = new Date(date);
 
     if (customCategory != null) {
@@ -133,7 +149,7 @@ router.patch('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { type, amount, category, paymentMethod, note, customCategory, date, receiptImage } = req.body;
+    const { type, amount, category, paymentMethod, note, tags, customCategory, date, receiptImage } = req.body;
     if (!type || amount == null) {
       return res.status(400).json({ message: 'Type and amount are required' });
     }
@@ -156,6 +172,7 @@ router.post('/', async (req, res, next) => {
       category: resolvedCategory,
       paymentMethod: type === 'income' ? undefined : paymentMethod || 'cash',
       note,
+      tags: normalizeTags(tags),
       customCategory: type === 'savings' ? '' : trimmedCustom,
       date: date ? new Date(date) : new Date(),
       receiptImage: receiptRef,

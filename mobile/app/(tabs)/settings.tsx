@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,7 +8,8 @@ import {
   FlatList,
   Linking,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useNavigation } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -43,22 +44,31 @@ import { PatternLock } from '@/components/PatternLock';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { TextField } from '@/components/TextField';
 import { SettingsMenuRow } from '@/components/SettingsMenuRow';
+import { HeaderTitle } from '@/components/HeaderTitle';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Brand, Radius, Shadow, Spacing } from '@/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CURRENCIES, getCurrency } from '@/constants/currencies';
 import { UserAvatar } from '@/components/UserAvatar';
 import { pickProfileFromCamera, pickProfileFromLibrary } from '@/lib/profileImage';
 import { useUserDisplayName } from '@/hooks/useUserDisplayName';
 import { DriveBackupSection } from '@/components/DriveBackupSection';
+import { DeleteAccountDialog } from '@/components/DeleteAccountDialog';
+import { SignOutDialog } from '@/components/SignOutDialog';
+import type { ThemeMode } from '@/context/ThemeContext';
 
-function Section({ title, children, colors }: { title: string; children: ReactNode; colors: (typeof Colors)['light'] }) {
+const PUSH_NOTIFICATIONS_KEY = 'bachatcoach_push_notifications';
+
+type ThemeColors = (typeof Colors)['light'] | (typeof Colors)['dark'];
+
+function Section({ title, children, colors }: { title: string; children: ReactNode; colors: ThemeColors }) {
   return (
     <View style={styles.section}>
       <AppText variant="bodySemibold" color={colors.muted} style={styles.sectionTitle}>
         {title}
       </AppText>
-      <View style={[styles.card, Shadow.card, { backgroundColor: colors.card }]}>
+      <View style={[styles.card, Shadow.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {children}
       </View>
     </View>
@@ -67,6 +77,7 @@ function Section({ title, children, colors }: { title: string; children: ReactNo
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
+  const navigation = useNavigation();
   const { user, logout, updateCurrency, updateProfile, deleteAccount } = useAuth();
   const { showAlert, showConfirm } = useDialog();
   const displayName = useUserDisplayName();
@@ -74,6 +85,7 @@ export default function SettingsScreen() {
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
+  const insets = useSafeAreaInsets();
 
   const [lockOn, setLockOn] = useState(false);
   const [lockMethod, setLockMethod] = useState<LockMethod>('pin');
@@ -93,9 +105,18 @@ export default function SettingsScreen() {
   const [savingCurrency, setSavingCurrency] = useState(false);
   const [photoModal, setPhotoModal] = useState(false);
   const [savingPhoto, setSavingPhoto] = useState(false);
+  const [profileModal, setProfileModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editNameUr, setEditNameUr] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [signOutModal, setSignOutModal] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinLength, setPinLength] = useState<4 | 6>(4);
+  const [pushNotifications, setPushNotifications] = useState(true);
 
   const loadSecurity = useCallback(async () => {
     setLockOn(await isLockEnabled());
@@ -103,6 +124,18 @@ export default function SettingsScreen() {
     setBioOn(await isBiometricEnabled());
   }, []);
   useFocusEffect(useCallback(() => { loadSecurity(); }, [loadSecurity]));
+
+  useEffect(() => {
+    void AsyncStorage.getItem(PUSH_NOTIFICATIONS_KEY).then((v) => {
+      if (v === null) return;
+      setPushNotifications(v !== '0' && v !== 'false');
+    });
+  }, []);
+
+  const togglePushNotifications = async (value: boolean) => {
+    setPushNotifications(value);
+    await AsyncStorage.setItem(PUSH_NOTIFICATIONS_KEY, value ? '1' : '0');
+  };
 
   const currentLang = normalizeLanguage(i18n.language);
   const currentLanguage = getLanguage(currentLang);
@@ -117,18 +150,72 @@ export default function SettingsScreen() {
     );
   }, [currencySearch]);
 
-  const changeLanguage = async (lang: AppLanguage) => {
-    if (normalizeLanguage(i18n.language) === lang) { setLanguageModal(false); return; }
+  const applyLanguage = async (lang: AppLanguage, alsoChangeCurrency: boolean) => {
     setSavingLanguage(true);
     try {
-      const currency = getDefaultCurrencyForLanguage(lang);
+      const suggested = getDefaultCurrencyForLanguage(lang);
       await setStoredLanguage(lang);
-      if (user) await updateProfile({ language: lang, currency });
-      setLanguageModal(false); setLanguageSearch('');
-      showAlert({ title: t('settings.languageUpdated'), tone: 'success' });
+      if (user) {
+        await updateProfile(
+          alsoChangeCurrency
+            ? { language: lang, currency: suggested }
+            : { language: lang }
+        );
+      }
+      setLanguageModal(false);
+      setLanguageSearch('');
+      showAlert({
+        title: t('settings.allSetTitle'),
+        message: alsoChangeCurrency
+          ? t('settings.languageAndCurrencyUpdatedMsg', { currency: suggested })
+          : t('settings.languageOnlyUpdatedMsg'),
+        confirmLabel: t('common.done'),
+        tone: 'success',
+      });
     } catch {
       showAlert({ title: t('settings.languageUpdateFailed'), tone: 'error' });
-    } finally { setSavingLanguage(false); }
+    } finally {
+      setSavingLanguage(false);
+    }
+  };
+
+  const changeLanguage = (lang: AppLanguage) => {
+    if (normalizeLanguage(i18n.language) === lang) {
+      setLanguageModal(false);
+      return;
+    }
+
+    const suggested = getDefaultCurrencyForLanguage(lang);
+    const currentCurrency = (user?.currency || 'PKR').toUpperCase();
+    const currencyDiffers = suggested.toUpperCase() !== currentCurrency;
+
+    if (!currencyDiffers) {
+      void applyLanguage(lang, false);
+      return;
+    }
+
+    const languageName = getLanguage(lang).nativeName;
+    setLanguageModal(false);
+    setLanguageSearch('');
+    showConfirm({
+      title: t('settings.alsoChangeCurrencyTitle'),
+      message: t('settings.alsoChangeCurrencyMsg', {
+        language: languageName,
+        currency: suggested,
+        current: currentCurrency,
+      }),
+      // safePrimary: Keep currency is the solid CTA; Switch is outline.
+      confirmLabel: t('settings.alsoChangeCurrencyYes', { currency: suggested }),
+      cancelLabel: t('settings.alsoChangeCurrencyNo', { currency: currentCurrency }),
+      tone: 'info',
+      safePrimary: true,
+      onConfirm: () => {
+        void applyLanguage(lang, true);
+      },
+      onCancel: () => {
+        void applyLanguage(lang, false);
+      },
+    });
   };
 
   const resetLockForm = (method: LockMethod) => {
@@ -233,7 +320,12 @@ export default function SettingsScreen() {
       await updateCurrency(code);
       setCurrencyModal(false);
       setCurrencySearch('');
-      showAlert({ title: t('settings.currencyUpdated'), tone: 'success' });
+      showAlert({
+        title: t('settings.allSetTitle'),
+        message: t('settings.currencyUpdatedMsg'),
+        confirmLabel: t('common.done'),
+        tone: 'success',
+      });
     } catch {
       showAlert({ title: t('settings.currencyUpdateFailed'), tone: 'error' });
     } finally { setSavingCurrency(false); }
@@ -278,26 +370,82 @@ export default function SettingsScreen() {
     } finally { setSavingPhoto(false); }
   };
 
-  const handleDeleteAccount = () => {
-    showConfirm({
-      title: t('settings.deleteAccountTitle'),
-      message: t('settings.deleteAccountMsg'),
-      confirmLabel: t('settings.deleteAccountConfirm'),
-      cancelLabel: t('common.cancel'),
-      destructive: true,
-      tone: 'warning',
-      onConfirm: async () => {
-        try {
-          await deleteAccount();
-        } catch {
-          showAlert({ title: t('settings.deleteAccountFailed'), tone: 'error' });
-        }
-      },
-    });
+  const openProfileEditor = () => {
+    setEditName(user?.name || '');
+    setEditNameUr(user?.nameUr || '');
+    setProfileModal(true);
   };
 
-  const darkModeOn = themeMode === 'dark' || (themeMode === 'system' && scheme === 'dark');
-  const toggleDarkMode = (value: boolean) => setThemeMode(value ? 'dark' : 'light');
+  const saveProfileName = async () => {
+    const name = editName.trim();
+    if (!name) {
+      showAlert({ title: t('settings.nameRequired'), tone: 'warning' });
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      await updateProfile({ name, nameUr: editNameUr.trim() });
+      setProfileModal(false);
+      showAlert({ title: t('settings.nameUpdated'), tone: 'success' });
+    } catch {
+      showAlert({ title: t('settings.nameUpdateFailed'), tone: 'error' });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleLogout = useCallback(() => {
+    setSignOutModal(true);
+  }, []);
+
+  const confirmSignOut = useCallback(async () => {
+    setSigningOut(true);
+    try {
+      await logout();
+    } catch {
+      setSigningOut(false);
+      showAlert({ title: t('common.error'), tone: 'error' });
+    }
+  }, [logout, showAlert, t]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      // Fully custom header so title is true screen-center (nav buttons can't shift it).
+      header: () => (
+        <View style={{ backgroundColor: colors.card, paddingTop: insets.top }}>
+          <View style={styles.customHeader}>
+            <View style={styles.customHeaderTitle} pointerEvents="none">
+              <HeaderTitle title={t('settings.title')} subtitle={t('settings.subtitle')} />
+            </View>
+            <Pressable
+              onPress={handleLogout}
+              accessibilityLabel={t('settings.logout')}
+              hitSlop={10}
+              style={({ pressed }) => [styles.headerLogout, pressed && styles.pressed]}>
+              <Ionicons name="log-out-outline" size={22} color={Brand.danger} />
+            </Pressable>
+          </View>
+        </View>
+      ),
+    });
+  }, [colors.card, handleLogout, insets.top, navigation, t]);
+
+  const handleDeleteAccount = () => setDeleteModal(true);
+
+  const confirmDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      await deleteAccount();
+    } catch {
+      setDeletingAccount(false);
+      showAlert({ title: t('settings.deleteAccountFailed'), tone: 'error' });
+    }
+  };
+
+  const showComingSoon = () => {
+    showAlert({ title: t('settings.advancedSoon'), tone: 'info' });
+  };
+
   const switchTrack = { false: scheme === 'dark' ? '#334155' : '#CBD5E1', true: Brand.primary };
   const rowTheme = {
     textColor: colors.text,
@@ -305,17 +453,24 @@ export default function SettingsScreen() {
     borderColor: colors.border,
   };
 
+  const themeOptions: { key: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { key: 'light', label: t('settings.themeLight'), icon: 'sunny' },
+    { key: 'dark', label: t('settings.themeDark'), icon: 'moon' },
+    { key: 'system', label: t('settings.themeSystem'), icon: 'desktop-outline' },
+  ];
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}>
 
-      <View style={styles.profile}>
+      {/* Profile card */}
+      <View style={[styles.profileCard, Shadow.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <UserAvatar
           name={displayName}
           avatar={user?.avatar}
-          size={96}
+          size={88}
           circular
           editable
           onPress={() => setPhotoModal(true)}
@@ -323,55 +478,105 @@ export default function SettingsScreen() {
         <AppText variant="h2" color={colors.text} align="center" style={styles.name}>
           {displayName}
         </AppText>
-        <AppText variant="bodySmall" color={colors.muted} align="center">
+        <AppText variant="bodySmall" color={colors.muted} align="center" style={styles.email}>
           {user?.email}
         </AppText>
+        <Pressable
+          onPress={openProfileEditor}
+          style={({ pressed }) => [
+            styles.editProfileRow,
+            { borderTopColor: colors.border },
+            pressed && styles.pressed,
+          ]}>
+          <RTLRow gap={10} style={styles.editProfileInner}>
+            <View style={[styles.editProfileIcon, { backgroundColor: `${Brand.primary}14` }]}>
+              <Ionicons name="person-outline" size={18} color={Brand.primary} />
+            </View>
+            <AppText variant="body" color={colors.text} style={styles.editProfileLabel}>
+              {t('settings.editProfile')}
+            </AppText>
+            <Ionicons name="create-outline" size={18} color={Brand.primary} />
+          </RTLRow>
+        </Pressable>
       </View>
 
-      <Section title={t('settings.personalInfo')} colors={colors}>
+      <Section title={t('settings.account')} colors={colors}>
+        <SettingsMenuRow
+          icon="person-outline"
+          label={t('settings.personalInformation')}
+          subtitle={displayName || '—'}
+          onPress={openProfileEditor}
+          right={<Ionicons name="create-outline" size={18} color={Brand.primary} />}
+          {...rowTheme}
+        />
         <SettingsMenuRow
           icon="language-outline"
           label={t('settings.language')}
-          value={currentLanguage.nativeName}
+          subtitle={currentLanguage.nativeName}
           onPress={() => setLanguageModal(true)}
           {...rowTheme}
         />
         <SettingsMenuRow
           icon="cash-outline"
           label={t('settings.currency')}
-          value={currentCurrency.code}
+          subtitle={currentCurrency.code}
           onPress={() => setCurrencyModal(true)}
-          {...rowTheme}
-        />
-        <SettingsMenuRow
-          icon="mail-outline"
-          label={t('settings.email')}
-          value={user?.email || '—'}
           last
           {...rowTheme}
         />
       </Section>
 
-      <Section title={t('settings.accountSettings')} colors={colors}>
-        <SettingsMenuRow
-          icon="moon-outline"
-          label={t('settings.darkMode')}
-          {...rowTheme}
-          right={<Switch value={darkModeOn} onValueChange={toggleDarkMode} trackColor={switchTrack} thumbColor="#fff" />}
-        />
+      <Section title={t('settings.appearance')} colors={colors}>
+        <View style={styles.themePad}>
+          <RTLRow gap={8} style={styles.themePills}>
+            {themeOptions.map((opt) => {
+              const selected = themeMode === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setThemeMode(opt.key)}
+                  style={({ pressed }) => [
+                    styles.themePill,
+                    selected
+                      ? { backgroundColor: Brand.primary }
+                      : { backgroundColor: colors.field, borderColor: colors.border, borderWidth: 1 },
+                    pressed && styles.pressed,
+                  ]}>
+                  <Ionicons
+                    name={opt.icon}
+                    size={16}
+                    color={selected ? '#fff' : colors.muted}
+                  />
+                  <AppText
+                    variant="captionBold"
+                    color={selected ? '#fff' : colors.text}
+                    numberOfLines={1}>
+                    {opt.label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </RTLRow>
+        </View>
+      </Section>
+
+      <Section title={t('settings.security')} colors={colors}>
         <SettingsMenuRow
           icon="lock-closed-outline"
           label={t('lock.enablePin')}
+          subtitle={t('settings.appLockSubtitle')}
           {...rowTheme}
+          last={!lockOn}
           right={<Switch value={lockOn} onValueChange={toggleLock} trackColor={switchTrack} thumbColor="#fff" />}
         />
         {lockOn ? (
           <SettingsMenuRow
             icon="key-outline"
             label={t('lock.changeLock')}
-            value={lockMethod === 'pattern' ? t('lock.methodPattern') : t('lock.methodPin')}
+            subtitle={lockMethod === 'pattern' ? t('lock.methodPattern') : t('lock.methodPin')}
             actionLabel={t('common.change')}
             onPress={() => { void openPinModal(); }}
+            last={!biometricAvailable}
             {...rowTheme}
           />
         ) : null}
@@ -379,48 +584,195 @@ export default function SettingsScreen() {
           <SettingsMenuRow
             icon="finger-print-outline"
             label={t('lock.enableBiometric')}
+            last
             {...rowTheme}
             right={<Switch value={bioOn} onValueChange={toggleBiometric} trackColor={switchTrack} thumbColor="#fff" />}
           />
         ) : null}
+      </Section>
+
+      <Section title={t('settings.backup')} colors={colors}>
         <DriveBackupSection rowTheme={rowTheme} />
+      </Section>
+
+      <Section title={t('settings.notifications')} colors={colors}>
         <SettingsMenuRow
-          icon="log-out-outline"
-          label={t('settings.logout')}
-          onPress={logout}
+          icon="notifications-outline"
+          label={t('settings.pushNotifications')}
+          {...rowTheme}
+          right={
+            <Switch
+              value={pushNotifications}
+              onValueChange={togglePushNotifications}
+              trackColor={switchTrack}
+              thumbColor="#fff"
+            />
+          }
+        />
+        <SettingsMenuRow
+          icon="mail-outline"
+          label={t('settings.emailNotifications')}
+          subtitle={t('settings.emailNotificationsSubtitle')}
+          onPress={() => Linking.openURL('mailto:qjcoder@gmail.com')}
           last
           {...rowTheme}
         />
       </Section>
 
-      <Pressable onPress={handleDeleteAccount} style={({ pressed }) => [styles.deleteLink, pressed && styles.pressed]}>
-        <AppText variant="bodySemibold" color={colors.muted} align="center">
-          {t('settings.deleteAccount')}
-        </AppText>
+      <Section title={t('settings.preferences')} colors={colors}>
+        <SettingsMenuRow
+          icon="home-outline"
+          label={t('settings.defaultView')}
+          subtitle={t('settings.defaultViewSubtitle')}
+          onPress={showComingSoon}
+          {...rowTheme}
+        />
+        <SettingsMenuRow
+          icon="options-outline"
+          label={t('settings.dataPreferences')}
+          subtitle={t('settings.dataPreferencesSubtitle')}
+          onPress={() => setCurrencyModal(true)}
+          {...rowTheme}
+        />
+        <SettingsMenuRow
+          icon="construct-outline"
+          label={t('settings.advancedSettings')}
+          onPress={showComingSoon}
+          last
+          {...rowTheme}
+        />
+      </Section>
+
+      <Section title={t('settings.legal')} colors={colors}>
+        <SettingsMenuRow
+          icon="shield-checkmark-outline"
+          label={t('settings.privacyPolicy')}
+          onPress={() => Linking.openURL('https://bachatcoach.com/privacy')}
+          {...rowTheme}
+        />
+        <SettingsMenuRow
+          icon="document-text-outline"
+          label={t('settings.termsOfService')}
+          onPress={() => Linking.openURL('https://bachatcoach.com/terms')}
+          {...rowTheme}
+        />
+        <SettingsMenuRow
+          icon="help-circle-outline"
+          label={t('settings.contactSupport')}
+          onPress={() => Linking.openURL('mailto:qjcoder@gmail.com')}
+          {...rowTheme}
+        />
+        <SettingsMenuRow
+          icon="chatbubble-ellipses-outline"
+          label={t('settings.sendFeedback')}
+          onPress={() => Linking.openURL('mailto:qjcoder@gmail.com?subject=BachatCoach%20Feedback')}
+          {...rowTheme}
+        />
+        <SettingsMenuRow
+          icon="star-outline"
+          label={t('settings.rateApp')}
+          onPress={() => Linking.openURL('https://bachatcoach.com')}
+          last
+          {...rowTheme}
+        />
+      </Section>
+
+      <Section title={t('settings.about')} colors={colors}>
+        <SettingsMenuRow
+          icon="information-circle-outline"
+          label={t('settings.appVersion')}
+          subtitle={t('settings.appVersionValue')}
+          last
+          {...rowTheme}
+        />
+      </Section>
+
+      {/* Delete account */}
+      <Pressable
+        onPress={handleDeleteAccount}
+        style={({ pressed }) => [
+          styles.deleteCard,
+          {
+            borderColor: Brand.danger,
+            backgroundColor: `${Brand.danger}12`,
+          },
+          pressed && styles.pressed,
+        ]}>
+        <RTLRow gap={12} style={styles.deleteInner}>
+          <View style={[styles.deleteIcon, { backgroundColor: `${Brand.danger}18` }]}>
+            <Ionicons name="trash-outline" size={18} color={Brand.danger} />
+          </View>
+          <View style={styles.deleteCopy}>
+            <AppText variant="body" color={Brand.danger} style={styles.deleteTitle}>
+              {t('settings.deleteAccount')}
+            </AppText>
+            <AppText variant="caption" color={colors.muted} numberOfLines={2}>
+              {t('settings.deleteAccountSubtitle')}
+            </AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Brand.danger} />
+        </RTLRow>
       </Pressable>
 
-      <View style={styles.legalRow}>
-        {[
-          { icon: 'shield-checkmark-outline' as const, label: t('settings.privacyPolicy'), onPress: () => Linking.openURL('https://bachatcoach.com/privacy') },
-          { icon: 'document-text-outline' as const, label: t('settings.termsOfService'), onPress: () => Linking.openURL('https://bachatcoach.com/terms') },
-          { icon: 'mail-outline' as const, label: t('settings.contactSupport'), onPress: () => Linking.openURL('mailto:qjcoder@gmail.com') },
-        ].map((item, index) => (
-          <View key={item.label} style={styles.legalItem}>
-            {index > 0 ? <View style={[styles.legalDivider, { backgroundColor: colors.border }]} /> : null}
-            <Pressable
-              onPress={item.onPress}
-              accessibilityLabel={item.label}
-              hitSlop={8}
-              style={({ pressed }) => [styles.legalBtn, { borderColor: Brand.primary, backgroundColor: colors.card }, pressed && styles.pressed]}>
-              <Ionicons name={item.icon} size={20} color={Brand.primary} />
-            </Pressable>
-          </View>
-        ))}
+      {/* Footer */}
+      <View style={styles.footer}>
+        <Ionicons name="leaf" size={22} color={Brand.primary} />
+        <AppText variant="caption" color={colors.muted} align="center" style={styles.footerTagline}>
+          {t('settings.footerTagline')}
+        </AppText>
+        <AppText variant="bodySmallBold" color={colors.text} align="center">
+          BachatCoach
+        </AppText>
       </View>
 
-      <AppText variant="caption" color={colors.muted} style={styles.version}>
-        BachatCoach v1.0
-      </AppText>
+      <DeleteAccountDialog
+        visible={deleteModal}
+        busy={deletingAccount}
+        onClose={() => !deletingAccount && setDeleteModal(false)}
+        onConfirm={confirmDeleteAccount}
+      />
+
+      <SignOutDialog
+        visible={signOutModal}
+        busy={signingOut}
+        onClose={() => !signingOut && setSignOutModal(false)}
+        onConfirm={confirmSignOut}
+      />
+
+      <BottomSheet
+        visible={profileModal}
+        title={t('settings.editProfile')}
+        onClose={() => !savingProfile && setProfileModal(false)}>
+        <TextField
+          label={t('auth.name')}
+          icon="person-outline"
+          value={editName}
+          onChangeText={setEditName}
+          autoCapitalize="words"
+        />
+        <TextField
+          label={t('auth.nameUr')}
+          icon="text-outline"
+          value={editNameUr}
+          onChangeText={setEditNameUr}
+          autoCapitalize="words"
+        />
+        <RTLRow style={{ marginTop: 8 }} gap={10}>
+          <Button
+            title={t('common.cancel')}
+            onPress={() => setProfileModal(false)}
+            variant="outline"
+            style={{ flex: 1 }}
+            disabled={savingProfile}
+          />
+          <Button
+            title={t('common.save')}
+            onPress={saveProfileName}
+            style={{ flex: 1 }}
+            disabled={savingProfile}
+          />
+        </RTLRow>
+      </BottomSheet>
 
       <BottomSheet visible={photoModal} title={t('settings.changePhoto')} onClose={() => !savingPhoto && setPhotoModal(false)}>
         {[
@@ -512,7 +864,11 @@ export default function SettingsScreen() {
           </RTLRow>
       </BottomSheet>
 
-      <BottomSheet visible={currencyModal} title={t('settings.selectCurrency')} onClose={() => { setCurrencyModal(false); setCurrencySearch(''); }}>
+      <BottomSheet
+        visible={currencyModal}
+        title={t('settings.selectCurrency')}
+        scrollable={false}
+        onClose={() => { setCurrencyModal(false); setCurrencySearch(''); }}>
         <TextField label={t('settings.searchCurrency')} icon="search-outline" value={currencySearch} onChangeText={setCurrencySearch} autoCapitalize="characters" />
         <FlatList
           data={filteredCurrencies} keyExtractor={(item) => item.code} style={styles.listSheet} keyboardShouldPersistTaps="handled"
@@ -542,7 +898,11 @@ export default function SettingsScreen() {
         />
       </BottomSheet>
 
-      <BottomSheet visible={languageModal} title={t('settings.selectLanguage')} onClose={() => { setLanguageModal(false); setLanguageSearch(''); }}>
+      <BottomSheet
+        visible={languageModal}
+        title={t('settings.selectLanguage')}
+        scrollable={false}
+        onClose={() => { setLanguageModal(false); setLanguageSearch(''); }}>
         <TextField label={t('settings.searchLanguage')} icon="search-outline" value={languageSearch} onChangeText={setLanguageSearch} />
         <FlatList
           data={filteredLanguages} keyExtractor={(item) => item.code} style={styles.listSheet} keyboardShouldPersistTaps="handled"
@@ -580,14 +940,57 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingBottom: 40 },
-  profile: {
+  content: { paddingTop: Spacing.sm, paddingBottom: 48 },
+  customHeader: {
+    height: 56,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 20,
-    paddingHorizontal: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(148,163,184,0.25)',
   },
-  name: { marginTop: 14, marginBottom: 4 },
+  customHeaderTitle: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 56,
+  },
+  headerLogout: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  profileCard: {
+    marginHorizontal: Spacing.md,
+    marginBottom: 14,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    paddingTop: 22,
+    overflow: 'hidden',
+  },
+  name: { marginTop: 12, marginBottom: 2, paddingHorizontal: Spacing.md },
+  email: { marginTop: 4, marginBottom: 16, paddingHorizontal: Spacing.md },
+  editProfileRow: {
+    alignSelf: 'stretch',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  editProfileInner: { alignItems: 'center' },
+  editProfileIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editProfileLabel: { flex: 1, fontWeight: '600' },
   section: {
     marginHorizontal: Spacing.md,
     marginBottom: 18,
@@ -598,40 +1001,55 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  themePad: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  themePills: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  themePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
   },
   pinHint: { marginBottom: 8 },
   pinFieldLabel: { marginTop: 14, marginBottom: 8 },
-  deleteLink: {
-    alignSelf: 'center',
-    paddingVertical: 10,
+  deleteCard: {
+    marginHorizontal: Spacing.md,
     marginTop: 4,
-  },
-  legalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  legalItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legalDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 22,
-    marginHorizontal: 14,
-  },
-  legalBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    marginBottom: 24,
+    borderRadius: Radius.lg,
     borderWidth: 1.5,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  deleteInner: { alignItems: 'center' },
+  deleteIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  deleteCopy: { flex: 1, minWidth: 0, gap: 2 },
+  deleteTitle: { fontWeight: '600' },
+  footer: {
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 8,
+  },
+  footerTagline: { marginTop: 2 },
   pressed: { opacity: 0.6 },
-  version: { textAlign: 'center', marginTop: 18 },
   sheetItem: { paddingVertical: 16 },
   listSheet: { maxHeight: 440, marginTop: 8 },
   pickerRow: {

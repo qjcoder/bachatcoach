@@ -16,9 +16,16 @@ type TransactionDateTimeProps = {
   value: Date;
   onChange: (date: Date) => void;
   accent?: string;
+  /** Force dark surfaces for add-transaction */
+  dark?: boolean;
 };
 
-export function TransactionDateTime({ value, onChange, accent = Brand.primary }: TransactionDateTimeProps) {
+export function TransactionDateTime({
+  value,
+  onChange,
+  accent = Brand.primary,
+  dark = false,
+}: TransactionDateTimeProps) {
   const { t, i18n } = useTranslation();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
@@ -26,6 +33,13 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
   const isRTL = useIsRTL();
   const [showDate, setShowDate] = useState(false);
   const [showTime, setShowTime] = useState(false);
+
+  const text = dark ? '#FFFFFF' : colors.text;
+  const muted = dark ? 'rgba(255,255,255,0.55)' : colors.muted;
+  const field = dark ? 'rgba(255,255,255,0.06)' : colors.field;
+  const border = dark ? 'rgba(255,255,255,0.1)' : colors.border;
+  const card = dark ? '#0F1C19' : colors.card;
+  const themeVariant = dark ? 'dark' : scheme;
 
   const closePickers = () => {
     setShowDate(false);
@@ -75,11 +89,11 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
     if (Platform.OS !== 'ios') return null;
 
     return (
-      <RTLRow gap={10} style={[styles.pickerActions, { borderTopColor: colors.border }]}>
+      <RTLRow gap={10} style={[styles.pickerActions, { borderTopColor: border }]}>
         <Pressable
           onPress={closePickers}
-          style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <AppText variant="bodySmallBold" color={colors.text}>
+          style={[styles.actionBtn, { borderColor: border, backgroundColor: card }]}>
+          <AppText variant="bodySmallBold" color={text}>
             {t('common.done')}
           </AppText>
         </Pressable>
@@ -106,16 +120,16 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
           onPress={openDate}
           style={[
             styles.cell,
-            { backgroundColor: `${accent}08`, borderColor: showDate ? accent : `${accent}22` },
+            { backgroundColor: dark ? field : `${accent}08`, borderColor: showDate ? accent : dark ? border : `${accent}22` },
             showDate && styles.cellActive,
           ]}>
           <View style={[styles.iconWrap, { backgroundColor: `${accent}16` }]}>
             <Ionicons name="calendar-outline" size={18} color={accent} />
           </View>
-          <AppText variant="caption" color={colors.muted} style={headingBlock}>
+          <AppText variant="caption" color={muted} style={headingBlock}>
             {t('expenses.date')}
           </AppText>
-          <AppText variant="bodySmallBold" color={colors.text} style={headingBlock}>
+          <AppText variant="bodySmallBold" color={text} style={headingBlock}>
             {formatTransactionDate(value, i18n.language)}
           </AppText>
         </Pressable>
@@ -124,23 +138,23 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
           onPress={openTime}
           style={[
             styles.cell,
-            { backgroundColor: `${accent}08`, borderColor: showTime ? accent : `${accent}22` },
+            { backgroundColor: dark ? field : `${accent}08`, borderColor: showTime ? accent : dark ? border : `${accent}22` },
             showTime && styles.cellActive,
           ]}>
           <View style={[styles.iconWrap, { backgroundColor: `${accent}16` }]}>
             <Ionicons name="time-outline" size={18} color={accent} />
           </View>
-          <AppText variant="caption" color={colors.muted} style={headingBlock}>
+          <AppText variant="caption" color={muted} style={headingBlock}>
             {t('expenses.time')}
           </AppText>
-          <AppText variant="bodySmallBold" color={colors.text} style={headingBlock}>
+          <AppText variant="bodySmallBold" color={text} style={headingBlock}>
             {formatTransactionTime(value, i18n.language)}
           </AppText>
         </Pressable>
       </RTLRow>
 
       {showDate ? (
-        <View style={[styles.pickerPanel, { borderColor: colors.border, backgroundColor: colors.field }]}>
+        <View style={[styles.pickerPanel, { borderColor: border, backgroundColor: field }]}>
           <View style={styles.pickerWrap}>
             <DateTimePicker
               value={value}
@@ -148,7 +162,7 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={onDateChange}
               maximumDate={new Date()}
-              themeVariant={scheme}
+              themeVariant={themeVariant}
             />
           </View>
           {renderPickerActions('date')}
@@ -156,14 +170,14 @@ export function TransactionDateTime({ value, onChange, accent = Brand.primary }:
       ) : null}
 
       {showTime ? (
-        <View style={[styles.pickerPanel, { borderColor: colors.border, backgroundColor: colors.field }]}>
+        <View style={[styles.pickerPanel, { borderColor: border, backgroundColor: field }]}>
           <View style={styles.pickerWrap}>
             <DateTimePicker
               value={value}
               mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={onTimeChange}
-              themeVariant={scheme}
+              themeVariant={themeVariant}
             />
           </View>
           {renderPickerActions('time')}
@@ -180,8 +194,9 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: Radius.md,
     borderWidth: 1,
-    padding: 14,
-    minHeight: 96,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    minHeight: 72,
     justifyContent: 'center',
   },
   cellActive: {
@@ -216,11 +231,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
 });

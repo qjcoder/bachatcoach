@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppDialog, type AppDialogTone } from '@/components/AppDialog';
+import { BlurOverlayProvider } from '@/context/BlurOverlayContext';
 
 export type ShowAlertOptions = {
   title: string;
@@ -24,7 +25,11 @@ export type ShowConfirmOptions = {
   cancelLabel?: string;
   tone?: AppDialogTone;
   destructive?: boolean;
+  /** Emphasize Cancel as the solid primary CTA (safer choice). */
+  safePrimary?: boolean;
   onConfirm: () => void | Promise<void>;
+  /** Called when Cancel / close / backdrop is used (optional). */
+  onCancel?: () => void | Promise<void>;
 };
 
 type DialogContextValue = {
@@ -84,22 +89,42 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const onClose = async () => {
+    if (dialog?.mode === 'confirm' && dialog.onCancel && !busyRef.current) {
+      busyRef.current = true;
+      const handler = dialog.onCancel;
+      setDialog(null);
+      try {
+        await handler();
+      } finally {
+        busyRef.current = false;
+      }
+      return;
+    }
+    close();
+  };
+
   return (
     <DialogContext.Provider value={value}>
-      {children}
-      <AppDialog
-        visible={Boolean(dialog)}
-        title={dialog?.title || ''}
-        message={dialog?.message}
-        tone={dialog?.tone || (dialog?.mode === 'confirm' ? 'warning' : 'info')}
-        confirmLabel={dialog?.confirmLabel || t('common.ok')}
-        cancelLabel={
-          dialog?.mode === 'confirm' ? dialog.cancelLabel || t('common.cancel') : undefined
-        }
-        destructive={dialog?.mode === 'confirm' ? Boolean(dialog.destructive) : false}
-        onConfirm={dialog?.mode === 'confirm' ? onConfirm : undefined}
-        onClose={close}
-      />
+      <BlurOverlayProvider
+        overlay={
+          <AppDialog
+            visible={Boolean(dialog)}
+            title={dialog?.title || ''}
+            message={dialog?.message}
+            tone={dialog?.tone || (dialog?.mode === 'confirm' ? 'warning' : 'info')}
+            confirmLabel={dialog?.confirmLabel || t('common.ok')}
+            cancelLabel={
+              dialog?.mode === 'confirm' ? dialog.cancelLabel || t('common.cancel') : undefined
+            }
+            destructive={dialog?.mode === 'confirm' ? Boolean(dialog.destructive) : false}
+            safePrimary={dialog?.mode === 'confirm' ? Boolean(dialog.safePrimary) : false}
+            onConfirm={dialog?.mode === 'confirm' ? onConfirm : undefined}
+            onClose={onClose}
+          />
+        }>
+        {children}
+      </BlurOverlayProvider>
     </DialogContext.Provider>
   );
 }

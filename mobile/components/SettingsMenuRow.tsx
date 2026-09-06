@@ -8,6 +8,9 @@ import { Brand } from '@/constants/theme';
 type SettingsMenuRowProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  /** Muted line under the label (mockup-style). */
+  subtitle?: string;
+  /** @deprecated Prefer subtitle — kept for older call sites. */
   value?: string;
   detail?: string;
   actionLabel?: string;
@@ -23,6 +26,7 @@ type SettingsMenuRowProps = {
 export function SettingsMenuRow({
   icon,
   label,
+  subtitle,
   value,
   detail,
   actionLabel,
@@ -34,24 +38,25 @@ export function SettingsMenuRow({
   mutedColor,
   borderColor,
 }: SettingsMenuRowProps) {
+  const under = subtitle ?? value;
   const content = (
     <RTLRow style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderColor }]}>
-      <View style={[styles.iconBox, { backgroundColor: `${Brand.primary}14` }]}>
+      <View style={[styles.iconBox, { backgroundColor: danger ? `${Brand.danger}14` : `${Brand.primary}14` }]}>
         <Ionicons name={icon} size={18} color={danger ? Brand.danger : Brand.primary} />
       </View>
       <View style={styles.copy}>
-        {value ? (
-          <>
-            <AppText variant="caption" color={mutedColor} numberOfLines={1}>{label}</AppText>
-            <AppText variant="bodySemibold" color={danger ? Brand.danger : textColor} numberOfLines={1}>
-              {value}
-            </AppText>
-          </>
-        ) : (
-          <AppText variant="body" color={danger ? Brand.danger : textColor} numberOfLines={1}>
-            {label}
+        <AppText
+          variant="body"
+          color={danger ? Brand.danger : textColor}
+          numberOfLines={1}
+          style={styles.label}>
+          {label}
+        </AppText>
+        {under ? (
+          <AppText variant="caption" color={mutedColor} numberOfLines={1}>
+            {under}
           </AppText>
-        )}
+        ) : null}
       </View>
       {detail ? (
         <AppText variant="bodySmall" color={mutedColor} numberOfLines={1} style={styles.detail}>
@@ -61,11 +66,12 @@ export function SettingsMenuRow({
       {actionLabel ? (
         <AppText variant="bodySmallBold" color={Brand.primary}>{actionLabel}</AppText>
       ) : right ? right : onPress ? (
-        <Ionicons name="chevron-forward" size={16} color={mutedColor} />
+        <Ionicons name="chevron-forward" size={16} color={danger ? Brand.danger : mutedColor} />
       ) : null}
     </RTLRow>
   );
 
+  if (!onPress && !right) return content;
   if (!onPress) return content;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
@@ -89,6 +95,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   copy: { flex: 1, minWidth: 0, gap: 2 },
+  label: { fontWeight: '600' },
   detail: { marginEnd: 4, maxWidth: 120 },
   pressed: { opacity: 0.6 },
 });

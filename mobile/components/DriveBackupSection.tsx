@@ -180,6 +180,7 @@ export function DriveBackupSection({ rowTheme }: Props) {
         label={t('backup.menu')}
         detail={statusLabel}
         onPress={() => setSheetOpen(true)}
+        last
         {...rowTheme}
       />
 

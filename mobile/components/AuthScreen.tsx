@@ -36,7 +36,8 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 20}>
       <LinearGradient
         colors={[...gradientColors]}
         locations={isDark ? [0, 0.3, 0.65, 1] : [0, 0.25, 0.5, 0.75, 1]}
@@ -62,8 +63,10 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
       </Pressable>
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 48 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
         bounces={false}>
 

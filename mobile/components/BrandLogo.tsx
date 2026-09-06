@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/AppText';
 
 const logoIcon = require('@/assets/images/logo-icon.png');
-const logoFull = require('@/assets/images/logo-full.png');
 const logoAuth = require('@/assets/images/logo-auth.png');
+const logoSplash = require('@/assets/images/splash-logo.png');
 
 type BrandLogoProps = {
   size?: number;
-  /** `icon` — app mark; `full` — splash mark with slogan; `auth` — login/signup mark */
+  /** Cap width for full/auth marks (preferred for splash — avoids edge crop) */
+  maxWidth?: number;
+  /** `icon` — app mark; `full` — splash mark; `auth` — login/signup mark */
   mode?: 'icon' | 'full' | 'auth';
   showTagline?: boolean;
   taglineColor?: string;
@@ -18,8 +20,16 @@ type BrandLogoProps = {
   containerStyle?: StyleProp<ViewStyle>;
 };
 
+function logoAspect(source: number) {
+  const resolve =
+    typeof Image.resolveAssetSource === 'function' ? Image.resolveAssetSource : undefined;
+  const resolved = resolve?.(source);
+  return resolved?.width && resolved?.height ? resolved.width / resolved.height : 1.28;
+}
+
 export function BrandLogo({
   size = 72,
+  maxWidth,
   mode = 'icon',
   showTagline = false,
   taglineColor = 'rgba(255,255,255,0.85)',
@@ -29,16 +39,15 @@ export function BrandLogo({
   const { t } = useTranslation();
 
   if (mode === 'full' || mode === 'auth') {
-    // full: ~828×646 with “Save Smart. Grow Better.”
-    // auth: ~490×336 wordmark only (login/signup)
-    const ratio = mode === 'full' ? 646 / 828 : 336 / 490;
-    const width = size * (mode === 'full' ? 2.7 : 2.2);
-    const height = width * ratio;
+    const source = mode === 'full' ? logoSplash : logoAuth;
+    const aspectRatio = logoAspect(source);
+    const fallbackWidth = size * (mode === 'full' ? 2.4 : 2.1);
+    const width = maxWidth != null ? maxWidth : fallbackWidth;
     return (
-      <View style={[styles.fullWrap, containerStyle]}>
+      <View style={[styles.fullWrap, containerStyle, { width, maxWidth: '100%' as const }]}>
         <Image
-          source={mode === 'full' ? logoFull : logoAuth}
-          style={[styles.full, { width, height }, style]}
+          source={source}
+          style={[styles.full, { width: '100%', aspectRatio }, style]}
           resizeMode="contain"
           accessibilityLabel="BachatCoach"
         />
@@ -77,8 +86,11 @@ const styles = StyleSheet.create({
   },
   fullWrap: {
     alignItems: 'center',
+    alignSelf: 'center',
   },
-  full: {},
+  full: {
+    // width + aspectRatio only — never force a mismatched height (causes stretch)
+  },
   tagline: {
     marginTop: 10,
     letterSpacing: 1.2,

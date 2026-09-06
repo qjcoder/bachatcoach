@@ -19,6 +19,7 @@ const contactSchema = new mongoose.Schema(
     phone: { type: String, trim: true, default: '' },
     phoneKey: { type: String, trim: true, default: '', index: true },
     direction: { type: String, enum: ['i_lent', 'i_borrowed'], required: true },
+    dueDate: { type: Date, default: null },
     entries: [loanEntrySchema],
     isSettled: { type: Boolean, default: false },
   },

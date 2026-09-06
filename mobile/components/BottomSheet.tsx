@@ -1,8 +1,17 @@
 import { type ReactNode } from 'react';
-import { View, Modal, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
+import { ModalBackdrop } from '@/components/ModalBackdrop';
+import { AppPortal } from '@/context/BlurOverlayContext';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Radius } from '@/constants/theme';
@@ -12,51 +21,92 @@ type BottomSheetProps = {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Wrap body in ScrollView (default). Set false when children include FlatList/ScrollView. */
+  scrollable?: boolean;
+  /** Optional title / handle accent */
+  accentColor?: string;
 };
 
-export function BottomSheet({ visible, title, onClose, children }: BottomSheetProps) {
+export function BottomSheet({
+  visible,
+  title,
+  onClose,
+  children,
+  scrollable = true,
+  accentColor,
+}: BottomSheetProps) {
   const colors = Colors[useColorScheme() ?? 'light'];
   const insets = useSafeAreaInsets();
 
+  const body = scrollable ? (
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.sheetContent}
+      bounces={false}
+      nestedScrollEnabled>
+      {children}
+    </ScrollView>
+  ) : (
+    children
+  );
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <AppPortal visible={visible}>
       <KeyboardAvoidingView
         style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 16}>
+        <ModalBackdrop onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 12 }]}>
+          <View style={[styles.handle, { backgroundColor: accentColor ?? colors.border }]} />
           <View style={styles.titleRow}>
-            <AppText variant="h2" color={colors.text} style={styles.title}>{title}</AppText>
+            <AppText variant="h2" color={accentColor ?? colors.text} style={styles.title}>
+              {title}
+            </AppText>
             <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={colors.muted ?? '#94A3B8'} />
             </Pressable>
           </View>
-          {children}
+          {body}
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppPortal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.45)' },
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'flex-end',
+  },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    maxHeight: '90%',
+    paddingTop: 10,
+    maxHeight: '88%',
+    zIndex: 2,
   },
   handle: {
+    alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
   },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  title: { marginBottom: 0 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  title: { flex: 1, paddingEnd: 12 },
   closeBtn: { padding: 4 },
+  sheetContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
 });

@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, ScrollView, Pressable, I18nManager } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Animated,
+  Pressable,
+  I18nManager,
+  Dimensions,
+  ScrollView,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,11 +21,16 @@ type SplashViewProps = {
   onFinish: () => void;
 };
 
+const SCREEN_W = Dimensions.get('window').width;
+const SCREEN_H = Dimensions.get('window').height;
+/** Large splash mark — fills width without edge crop */
+const LOGO_MAX_W = Math.min(SCREEN_W - 48, 360);
+
 export function SplashView({ onFinish }: SplashViewProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+  const scaleAnim = useRef(new Animated.Value(0.94)).current;
   const nudgeAnim = useRef(new Animated.Value(0)).current;
   const finishing = useRef(false);
   const dailyQuote = getDailyQuote(scriptLanguage(i18n.language));
@@ -50,7 +63,7 @@ export function SplashView({ onFinish }: SplashViewProps) {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <View style={styles.pattern}>
+      <View style={styles.pattern} pointerEvents="none">
         <View style={[styles.circle, styles.circleA]} />
         <View style={[styles.circle, styles.circleB]} />
         <View style={[styles.circle, styles.circleC]} />
@@ -60,27 +73,45 @@ export function SplashView({ onFinish }: SplashViewProps) {
         style={[
           styles.content,
           {
-            paddingTop: insets.top + 12,
-            paddingBottom: insets.bottom + 88,
+            paddingTop: insets.top + 24,
+            paddingBottom: insets.bottom + 96,
             opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
           },
         ]}>
-        <BrandLogo mode="full" size={132} />
-        <ScrollView
-          style={styles.quoteScroll}
-          contentContainerStyle={styles.quoteScrollContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}>
-          <View style={styles.quoteBox}>
-            <AppText variant="body" color="rgba(255,255,255,0.95)" align="center" style={styles.quote}>
-              "{dailyQuote.text}"
-            </AppText>
-            <AppText variant="caption" color="rgba(255,255,255,0.7)" align="center" style={styles.source}>
-              — {dailyQuote.source}
-            </AppText>
-          </View>
-        </ScrollView>
+        <View style={styles.logoBlock}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
+            <BrandLogo mode="full" maxWidth={LOGO_MAX_W} />
+          </Animated.View>
+        </View>
+
+        <View style={styles.quoteBlock}>
+          <ScrollView
+            style={styles.quoteScroll}
+            contentContainerStyle={styles.quoteScrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}>
+            <View style={styles.quoteBox}>
+              <AppText
+                variant="body"
+                color="rgba(255,255,255,0.95)"
+                align="center"
+                style={styles.quote}
+                numberOfLines={5}>
+                "{dailyQuote.text}"
+              </AppText>
+              {dailyQuote.source ? (
+                <AppText
+                  variant="caption"
+                  color="rgba(255,255,255,0.65)"
+                  align="center"
+                  style={styles.source}
+                  numberOfLines={1}>
+                  — {dailyQuote.source}
+                </AppText>
+              ) : null}
+            </View>
+          </ScrollView>
+        </View>
       </Animated.View>
 
       <Animated.View
@@ -119,6 +150,7 @@ const styles = StyleSheet.create({
     zIndex: 10000,
     elevation: 10000,
     backgroundColor: '#000000',
+    overflow: 'hidden',
   },
   pattern: { ...StyleSheet.absoluteFill },
   circle: {
@@ -131,30 +163,43 @@ const styles = StyleSheet.create({
   circleC: { width: 120, height: 120, bottom: 40, right: 30 },
   content: {
     flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  logoBlock: {
+    flex: 1,
+    width: '100%',
+    maxWidth: LOGO_MAX_W + 8,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 28,
+  },
+  quoteBlock: {
     width: '100%',
+    maxWidth: Math.min(SCREEN_W - 48, 360),
+    alignItems: 'center',
+    marginBottom: Math.min(24, SCREEN_H * 0.02),
   },
   quoteScroll: {
     width: '100%',
-    maxWidth: 340,
-    flexGrow: 0,
-    flexShrink: 1,
-    marginTop: 28,
+    maxHeight: SCREEN_H * 0.22,
   },
-  quoteScrollContent: { flexGrow: 1, justifyContent: 'center' },
+  quoteScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   quoteBox: {
-    paddingHorizontal: 22,
-    paddingVertical: 18,
-    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.16)',
     width: '100%',
+    alignSelf: 'center',
   },
-  quote: { lineHeight: 24, fontStyle: 'italic' },
-  source: { marginTop: 10, lineHeight: 18 },
+  quote: { lineHeight: 22, fontStyle: 'italic' },
+  source: { marginTop: 8, lineHeight: 16 },
   nextWrap: {
     position: 'absolute',
   },

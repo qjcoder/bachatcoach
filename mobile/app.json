@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.bachatcoach.app",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,7 +38,7 @@
         {
           "backgroundColor": "#000000",
           "image": "./assets/images/splash-logo.png",
-          "imageWidth": 320,
+          "imageWidth": 380,
           "resizeMode": "contain"
         }
       ],

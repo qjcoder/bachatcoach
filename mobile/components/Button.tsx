@@ -8,17 +8,21 @@ type ButtonProps = {
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'outline';
   disabled?: boolean;
+  compact?: boolean;
   style?: ViewStyle;
 };
 
-export function Button({ title, onPress, variant = 'primary', disabled, style }: ButtonProps) {
+export function Button({ title, onPress, variant = 'primary', disabled, compact, style }: ButtonProps) {
   const colors = useColors();
+  const flat = StyleSheet.flatten(style) || {};
+  const outlineAccent =
+    typeof flat.borderColor === 'string' ? flat.borderColor : Brand.primary;
   const variantStyle =
     variant === 'primary'
       ? styles.primary
       : variant === 'secondary'
         ? styles.secondary
-        : [styles.outline, { backgroundColor: colors.field, borderColor: Brand.primary }];
+        : [styles.outline, { backgroundColor: colors.field, borderColor: outlineAccent }];
 
   return (
     <Pressable
@@ -26,6 +30,7 @@ export function Button({ title, onPress, variant = 'primary', disabled, style }:
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
+        compact && styles.compact,
         variantStyle,
         pressed && styles.pressed,
         disabled && styles.disabled,
@@ -33,7 +38,10 @@ export function Button({ title, onPress, variant = 'primary', disabled, style }:
       ]}>
       <AppText
         variant="button"
-        color={variant === 'outline' ? Brand.primary : '#FFFFFF'}
+        color={variant === 'outline' ? outlineAccent : '#FFFFFF'}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
         style={styles.buttonText}>
         {title}
       </AppText>
@@ -50,14 +58,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 50,
   },
+  compact: {
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    minHeight: 48,
+  },
   primary: { backgroundColor: Brand.primary },
-  secondary: { backgroundColor: Brand.secondary },
+  secondary: { backgroundColor: Brand.secondarySoft },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
     borderColor: Brand.primary,
   },
-  buttonText: { textAlign: 'center' },
+  buttonText: { textAlign: 'center', width: '100%' },
   pressed: { opacity: 0.88 },
   disabled: { opacity: 0.5 },
 });

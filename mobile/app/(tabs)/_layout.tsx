@@ -35,8 +35,6 @@ export default function TabLayout() {
     <View style={{ flex: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.tabIconSelected,
-        tabBarInactiveTintColor: colors.tabIconDefault,
         tabBarStyle: {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.border,
@@ -46,6 +44,8 @@ export default function TabLayout() {
           paddingTop: 6,
           ...Shadow.card,
         },
+        tabBarActiveTintColor: colors.tint,
+        tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: {
           fontFamily: getFontFamily(lang, Type.tab.fontWeight),
           fontSize: Math.max(9, Math.round(Type.tab.fontSize * factor)),
@@ -77,12 +77,12 @@ export default function TabLayout() {
       <Tabs.Screen
         name="expenses"
         options={{
-          title: t('expenses.title'),
-          tabBarLabel: t('tabs.expenses'),
-          headerTitle: () => <HeaderTitle title={t('expenses.title')} />,
+          title: t('expenses.pageTitle', { defaultValue: 'Cashflow' }),
+          tabBarLabel: t('tabs.expenses', { defaultValue: 'Cashflow' }),
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <SymbolView
-              name={{ ios: 'list.bullet.rectangle', android: 'receipt', web: 'receipt' }}
+              name={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
               tintColor={color}
               size={s(22)}
             />
@@ -94,7 +94,7 @@ export default function TabLayout() {
         options={{
           title: t('loans.title'),
           tabBarLabel: t('tabs.loans'),
-          headerTitle: () => <HeaderTitle title={t('loans.title')} />,
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
@@ -109,7 +109,7 @@ export default function TabLayout() {
         options={{
           title: t('insights.title'),
           tabBarLabel: t('tabs.insights'),
-          headerTitle: () => <HeaderTitle title={t('insights.title')} />,
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{ ios: 'chart.pie.fill', android: 'pie_chart', web: 'pie_chart' }}
@@ -124,7 +124,9 @@ export default function TabLayout() {
         options={{
           title: t('settings.title'),
           tabBarLabel: t('tabs.settings'),
-          headerTitle: () => <HeaderTitle title={t('settings.title')} />,
+          headerTitle: () => (
+            <HeaderTitle title={t('settings.title')} subtitle={t('settings.subtitle')} />
+          ),
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }}

@@ -13,6 +13,8 @@ type TextFieldProps = TextInputProps & {
   icon?: keyof typeof Ionicons.glyphMap;
   trailingIcon?: keyof typeof Ionicons.glyphMap;
   onTrailingPress?: () => void;
+  /** Focus accent (defaults to brand green) */
+  accent?: string;
 };
 
 export function TextField({
@@ -23,6 +25,7 @@ export function TextField({
   style,
   secureTextEntry,
   placeholder,
+  accent = Brand.primary,
   ...props
 }: TextFieldProps) {
   const { lang } = useAppType();
@@ -32,14 +35,14 @@ export function TextField({
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(secureTextEntry ?? false);
 
-  const borderColor = focused ? Brand.primary : colors.border;
-  const iconColor = focused ? Brand.primary : colors.muted;
+  const borderColor = focused ? accent : colors.border;
+  const iconColor = focused ? accent : colors.muted;
   const bgColor = focused ? colors.fieldFocused : colors.field;
 
   return (
     <View style={[styles.wrap, { direction: isRTL ? 'rtl' : 'ltr' }]}>
       {label ? (
-        <AppText variant="label" color={focused ? Brand.primary : colors.muted} style={styles.label}>
+        <AppText variant="label" color={focused ? accent : colors.muted} style={styles.label}>
           {label}
         </AppText>
       ) : null}

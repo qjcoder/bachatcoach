@@ -61,6 +61,11 @@ function sumByKind(rows) {
   return { income, expenses, toSavings };
 }
 
+function pctChange(current, previous) {
+  if (!previous) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / Math.abs(previous)) * 100);
+}
+
 router.get('/summary', async (req, res, next) => {
   try {
     const userId = userObjectId(req);
@@ -102,6 +107,31 @@ router.get('/summary', async (req, res, next) => {
               { $group: { _id: '$category', total: { $sum: '$amount' } } },
               { $sort: { total: -1 } },
             ],
+            incomeCategoryBreakdown: [
+              {
+                $match: {
+                  type: 'income',
+                  date: { $gte: start, $lt: end },
+                },
+              },
+              { $group: { _id: '$category', total: { $sum: '$amount' } } },
+              { $sort: { total: -1 } },
+            ],
+            recent: [
+              { $match: { date: { $gte: start, $lt: end } } },
+              { $sort: { date: -1 } },
+              { $limit: 4 },
+              {
+                $project: {
+                  type: 1,
+                  category: 1,
+                  customCategory: 1,
+                  amount: 1,
+                  note: 1,
+                  date: 1,
+                },
+              },
+            ],
           },
         },
       ]),
@@ -118,6 +148,8 @@ router.get('/summary', async (req, res, next) => {
     const current = sumByKind(facet.current || []);
     const previous = sumByKind(facet.previous || []);
     const categoryBreakdown = facet.categoryBreakdown || [];
+    const incomeCategoryBreakdown = facet.incomeCategoryBreakdown || [];
+    const recentTransactions = facet.recent || [];
 
     const { income, expenses, toSavings } = current;
     const saved = income - expenses;
@@ -155,8 +187,13 @@ router.get('/summary', async (req, res, next) => {
         expenses: expenses - previous.expenses,
         toSavings: toSavings - previous.toSavings,
         saved: saved - prevSaved,
+        incomePct: pctChange(income, previous.income),
+        expensesPct: pctChange(expenses, previous.expenses),
+        savedPct: pctChange(saved, prevSaved),
       },
       categoryBreakdown,
+      incomeCategoryBreakdown,
+      recentTransactions,
       loans: {
         totalLent,
         totalBorrowed,

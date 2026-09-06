@@ -7,7 +7,7 @@ import { RTLRow } from '@/components/RTLRow';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useDirection } from '@/hooks/useDirection';
-import { Brand, Radius, Shadow, Spacing } from '@/constants/theme';
+import { Brand, Radius, Shadow, Spacing, TxnKind, TxnKindSoft } from '@/constants/theme';
 
 type CardVariant = 'default' | 'elevated' | 'soft' | 'outline';
 
@@ -46,9 +46,10 @@ type CardHeaderProps = {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   iconColor?: string;
+  titleColor?: string;
 };
 
-export function CardHeader({ icon, title, iconColor = Brand.primary }: CardHeaderProps) {
+export function CardHeader({ icon, title, iconColor = Brand.primary, titleColor }: CardHeaderProps) {
   const { headingBlock } = useDirection();
 
   return (
@@ -57,7 +58,9 @@ export function CardHeader({ icon, title, iconColor = Brand.primary }: CardHeade
         <Ionicons name={icon} size={18} color={iconColor} />
       </View>
       <View style={styles.cardHeaderTitle}>
-        <AppText variant="h3" style={headingBlock}>{title}</AppText>
+        <AppText variant="h3" color={titleColor} style={headingBlock}>
+          {title}
+        </AppText>
       </View>
     </RTLRow>
   );
@@ -68,35 +71,73 @@ type StatCardProps = {
   value: string;
   accent?: string;
   iconName?: keyof typeof Ionicons.glyphMap;
+  /** Tighter padding for dense dashboards */
+  compact?: boolean;
 };
 
-export function StatCard({ label, value, accent, iconName }: StatCardProps) {
+function gradientForAccent(accent: string, dark: boolean): [string, string, ...string[]] {
+  if (accent === Brand.danger) {
+    return dark ? ['#3F1D1D', '#1C1917'] : ['#FFF5F5', '#FFE4E6', '#FFFFFF'];
+  }
+  if (accent === Brand.secondary) {
+    return dark ? ['#3D2E14', '#1C1917'] : ['#FFFBEB', '#FEF3C7', '#FFFFFF'];
+  }
+  return dark ? ['#064E3B', '#0F172A'] : ['#ECFDF5', '#D1FAE5', '#FFFFFF'];
+}
+
+function iconGradientForAccent(accent: string): [string, string] {
+  if (accent === Brand.danger || accent === TxnKind.expense) return [TxnKindSoft.expense, TxnKind.expense];
+  if (accent === Brand.secondary || accent === TxnKind.savings) return [TxnKindSoft.savings, TxnKind.savings];
+  return [TxnKindSoft.income, TxnKind.income];
+}
+
+export function StatCard({ label, value, accent, iconName, compact }: StatCardProps) {
   const scheme = useColorScheme() ?? 'light';
+  const dark = scheme === 'dark';
   const colors = Colors[scheme];
   const tint = accent || Brand.primary;
   const { headingBlock, alignStart, isRTL } = useDirection();
+  const wash = gradientForAccent(tint, dark);
+  const iconGrad = iconGradientForAccent(tint);
 
   return (
-    <Card variant="elevated" style={[styles.statCard, { alignItems: alignStart, direction: isRTL ? 'rtl' : 'ltr' }]}>
+    <LinearGradient
+      colors={wash}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[
+        styles.statCard,
+        compact && styles.statCardCompact,
+        dark ? styles.statCardDark : styles.statCardLight,
+        { alignItems: alignStart, direction: isRTL ? 'rtl' : 'ltr' },
+      ]}>
       {iconName ? (
-        <View style={[styles.statIconWrap, { backgroundColor: `${tint}12` }]}>
-          <Ionicons name={iconName} size={20} color={tint} />
-        </View>
+        <LinearGradient
+          colors={iconGrad}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.statIconWrap, compact && styles.statIconWrapCompact]}>
+          <Ionicons name={iconName} size={compact ? 15 : 18} color="#FFFFFF" />
+        </LinearGradient>
       ) : null}
       <View style={[styles.statTextCol, { alignItems: alignStart, alignSelf: 'stretch' }]}>
-        <AppText variant="overline" color={colors.muted} numberOfLines={2} style={[styles.statLabel, headingBlock]}>
+        <AppText
+          variant="overline"
+          color={colors.muted}
+          numberOfLines={2}
+          style={[styles.statLabel, compact && styles.statLabelCompact, headingBlock]}>
           {label}
         </AppText>
         <AppText
-          variant="amountSm"
-          color={accent || colors.text}
+          variant={compact ? 'bodySemibold' : 'amountSm'}
+          color={dark ? '#FFFFFF' : tint}
           numberOfLines={1}
           adjustsFontSizeToFit
           style={headingBlock}>
           {value}
         </AppText>
       </View>
-    </Card>
+    </LinearGradient>
   );
 }
 
@@ -106,50 +147,62 @@ type HeroSavingsCardProps = {
   rate: number;
   rateLabel: string;
   delta?: { value: string; positive: boolean } | null;
+  compact?: boolean;
 };
 
-export function HeroSavingsCard({ label, amount, rate, rateLabel, delta }: HeroSavingsCardProps) {
+export function HeroSavingsCard({ label, amount, rate, rateLabel, delta, compact }: HeroSavingsCardProps) {
   const { textBlock, contentAlign } = useDirection();
 
   return (
     <LinearGradient
-      colors={['#10B981', '#059669', '#047857']}
+      colors={['#6EE7B7', '#10B981', '#059669', '#047857']}
+      locations={[0, 0.35, 0.7, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.hero}>
-      <View style={styles.heroPattern}>
+      style={[styles.hero, compact && styles.heroCompact]}>
+      <View style={styles.heroPattern} pointerEvents="none">
         <View style={styles.heroCircleA} />
         <View style={styles.heroCircleB} />
+        <View style={styles.heroShine} />
       </View>
-      <RTLRow style={styles.heroContent} gap={16}>
+      <RTLRow style={styles.heroContent} gap={12}>
         <View style={[styles.heroLeft, contentAlign]}>
-          <AppText variant="label" color="rgba(255,255,255,0.9)" style={[styles.heroLabel, textBlock]}>
+          <AppText variant="label" color="rgba(255,255,255,0.92)" style={[styles.heroLabel, textBlock]}>
             {label}
           </AppText>
-          <AppText variant="amount" color="#FFFFFF" numberOfLines={1} adjustsFontSizeToFit style={[styles.heroAmount, textBlock]}>
+          <AppText
+            variant={compact ? 'amountMd' : 'amount'}
+            color="#FFFFFF"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={[styles.heroAmount, textBlock]}>
             {amount}
           </AppText>
         </View>
-        <View style={styles.rateBadge}>
-          <AppText variant="h2" color="#FFFFFF">{rate}%</AppText>
-          <AppText variant="caption" color="rgba(255,255,255,0.88)" align="center" style={styles.rateLabel}>
+        <View style={[styles.rateBadge, compact && styles.rateBadgeCompact]}>
+          <AppText variant={compact ? 'h3' : 'h2'} color="#FFFFFF">
+            {rate}%
+          </AppText>
+          <AppText variant="caption" color="rgba(255,255,255,0.9)" align="center" style={styles.rateLabel}>
             {rateLabel}
           </AppText>
         </View>
       </RTLRow>
       {delta ? (
-        <RTLRow style={styles.deltaRow} gap={8}>
-          <Ionicons
-            name={delta.positive ? 'trending-up' : 'trending-down'}
-            size={16}
-            color={delta.positive ? '#A7F3D0' : '#FECACA'}
-          />
-          <AppText
-            variant="bodySmallMedium"
-            color={delta.positive ? '#A7F3D0' : '#FECACA'}
-            style={styles.deltaText}>
-            {delta.value}
-          </AppText>
+        <RTLRow style={[styles.deltaRow, compact && styles.deltaRowCompact]} gap={8}>
+          <View style={styles.deltaChip}>
+            <Ionicons
+              name={delta.positive ? 'trending-up' : 'trending-down'}
+              size={14}
+              color={delta.positive ? '#ECFDF5' : '#FEE2E2'}
+            />
+            <AppText
+              variant="caption"
+              color={delta.positive ? '#ECFDF5' : '#FEE2E2'}
+              style={styles.deltaText}>
+              {delta.value}
+            </AppText>
+          </View>
         </RTLRow>
       ) : null}
     </LinearGradient>
@@ -253,42 +306,89 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardHeaderTitle: { flex: 1, minWidth: 0 },
-  statCard: { flex: 1, minWidth: '45%', padding: 14, alignSelf: 'stretch' },
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 14,
+    alignSelf: 'stretch',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  statCardCompact: { minWidth: 0, paddingVertical: 12, paddingHorizontal: 11 },
+  statCardLight: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(15,23,42,0.06)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  statCardDark: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
   statTextCol: { width: '100%' },
   statIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  statLabel: { marginBottom: 6 },
+  statIconWrapCompact: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  statLabel: { marginBottom: 4, letterSpacing: 0.4 },
+  statLabelCompact: { marginBottom: 3, fontSize: 10 },
   hero: {
     borderRadius: Radius.xl,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
     overflow: 'hidden',
-    ...Shadow.elevated,
+    shadowColor: '#047857',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  heroCompact: {
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: Radius.lg,
   },
   heroPattern: { ...StyleSheet.absoluteFillObject },
   heroCircleA: {
     position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    top: -40,
-    right: -20,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    top: -50,
+    right: -30,
   },
   heroCircleB: {
     position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    bottom: -30,
-    left: -20,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    bottom: -36,
+    left: -24,
+  },
+  heroShine: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    top: 20,
+    left: '38%',
   },
   heroContent: {
     justifyContent: 'space-between',
@@ -299,20 +399,35 @@ const styles = StyleSheet.create({
   heroLabel: { marginBottom: 6 },
   heroAmount: { marginTop: 2 },
   rateBadge: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.28)',
     minWidth: 72,
+  },
+  rateBadgeCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minWidth: 64,
   },
   rateLabel: { marginTop: 4 },
   deltaRow: {
     alignItems: 'center',
     gap: 8,
-    marginTop: 16,
+    marginTop: 14,
+  },
+  deltaRowCompact: { marginTop: 10 },
+  deltaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.16)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
   },
   deltaText: { flexShrink: 1 },
   listCard: {

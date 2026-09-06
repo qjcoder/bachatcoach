@@ -7,20 +7,40 @@ type SegmentedTabsProps<T extends string> = {
   tabs: { key: T; label: string }[];
   active: T;
   onChange: (key: T) => void;
+  /** Active pill color — defaults to brand primary (income green) */
+  accentColor?: string;
+  /** Track / inactive background */
+  trackColor?: string;
 };
 
-export function SegmentedTabs<T extends string>({ tabs, active, onChange }: SegmentedTabsProps<T>) {
+export function SegmentedTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+  accentColor = Brand.primary,
+  trackColor,
+}: SegmentedTabsProps<T>) {
   const colors = useColors();
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.field }]}>
+    <View style={[styles.wrap, { backgroundColor: trackColor ?? colors.field }]}>
       {tabs.map((tab) => {
         const isActive = tab.key === active;
         return (
           <Pressable
             key={tab.key}
             onPress={() => onChange(tab.key)}
-            style={[styles.tab, isActive && styles.tabActive]}>
+            style={[
+              styles.tab,
+              isActive && {
+                backgroundColor: accentColor,
+                shadowColor: accentColor,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+            ]}>
             <AppText
               variant="bodySmallBold"
               color={isActive ? '#FFFFFF' : colors.muted}
@@ -55,12 +75,4 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   tabLabel: { width: '100%' },
-  tabActive: {
-    backgroundColor: Brand.primary,
-    shadowColor: Brand.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 2,
-  },
 });

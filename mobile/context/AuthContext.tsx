@@ -1,14 +1,15 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter, useSegments } from 'expo-router';
+import i18n, { setStoredLanguage } from '@/i18n';
 import api, { clearApiCache, prefetchCriticalData, setAuthToken } from '@/lib/api';
 
-import { setStoredLanguage } from '@/i18n';
 import { type AppLanguage, normalizeLanguage } from '@/lib/language';
 import { getDefaultCurrencyForLanguage } from '@/constants/languages';
 import { clearGoogleTokens } from '@/lib/googleAuth';
 import { clearLockSettings } from '@/lib/lock';
 import type { BackupFrequency } from '@/lib/googleDriveBackup';
+import { showAppAlert } from '@/context/DialogContext';
 
 type User = {
   id: string;
@@ -119,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, loading, segments, router]);
 
-  const persistSession = async (token: string, userData: User) => {
+  const persistSession = async (token: string, userData: User, restoredFromDeletion?: boolean) => {
     clearApiCache();
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
@@ -127,18 +128,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await applyAccountLanguage(userData.language);
     setUser(userData);
     void prefetchCriticalData(userData.language || 'en');
+    if (restoredFromDeletion) {
+      showAppAlert(
+        i18n.t('settings.accountRestoredTitle'),
+        i18n.t('settings.accountRestoredMsg'),
+        'success'
+      );
+    }
   };
 
   const login = async (email: string, password: string) => {
     const { data } = await api.post('/auth/login', { email, password });
-    await persistSession(data.token, data.user);
+    await persistSession(data.token, data.user, data.restoredFromDeletion);
   };
 
   const loginWithGoogle = async (idToken: string) => {
     const language = user?.language;
     const currency = language ? getDefaultCurrencyForLanguage(language) : undefined;
     const { data } = await api.post('/auth/google', { idToken, language, currency });
-    await persistSession(data.token, data.user);
+    await persistSession(data.token, data.user, data.restoredFromDeletion);
   };
 
   const sendEmailOtp = async (email: string, purpose: 'login' | 'register') => {
@@ -168,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       language,
       currency,
     });
-    await persistSession(data.token, data.user);
+    await persistSession(data.token, data.user, data.restoredFromDeletion);
   };
 
   const register = async (
@@ -213,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteAccount = async () => {
-    // Explicit account wipe on the server. Uninstalling the app does NOT do this.
+    // Schedules deletion with a 7-day recovery window. Sign-in within 7 days cancels it.
     await api.delete('/auth/account');
     await clearLocalSession();
     router.replace('/(auth)/login');

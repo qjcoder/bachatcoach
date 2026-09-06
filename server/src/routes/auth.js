@@ -11,6 +11,12 @@ import EmailOtp, {
 } from '../models/EmailOtp.js';
 import { sendOtpEmail } from '../lib/sendOtpEmail.js';
 import { auth } from '../middleware/auth.js';
+import {
+  deletionDueDate,
+  purgeExpiredDeletions,
+  purgeUserData,
+  resolvePendingDeletion,
+} from '../lib/accountDeletion.js';
 
 const router = express.Router();
 const googleClient = new OAuth2Client();
@@ -47,7 +53,20 @@ function userResponse(user) {
     backupEnabled: Boolean(user.backupEnabled),
     backupFrequency: user.backupFrequency || 'off',
     lastBackupAt: user.lastBackupAt || null,
+    deletionScheduledAt: user.deletionScheduledAt || null,
   };
+}
+
+/** Login / Google / OTP: restore within grace period, or purge if expired. */
+async function finalizeSignIn(user) {
+  if (!user) return { user: null, restored: false, purged: false };
+
+  if (user.deletionScheduledAt && new Date(user.deletionScheduledAt) <= new Date()) {
+    await purgeUserData(user._id);
+    return { user: null, restored: false, purged: true };
+  }
+
+  return resolvePendingDeletion(user);
 }
 
 router.post('/register', async (req, res, next) => {
@@ -82,8 +101,13 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user || !(await user.comparePassword(password))) {
+    const found = await User.findOne({ email });
+    if (!found || !(await found.comparePassword(password))) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const { user, restored, purged } = await finalizeSignIn(found);
+    if (purged || !user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -91,6 +115,7 @@ router.post('/login', async (req, res, next) => {
     res.json({
       token,
       user: userResponse(user),
+      restoredFromDeletion: restored,
     });
   } catch (err) {
     next(err);
@@ -172,8 +197,17 @@ router.post('/google', async (req, res, next) => {
       });
     }
 
-    const token = signToken(user._id);
-    res.json({ token, user: userResponse(user) });
+    const resolved = await finalizeSignIn(user);
+    if (resolved.purged || !resolved.user) {
+      return res.status(401).json({ message: 'No account found for this Google sign-in' });
+    }
+
+    const token = signToken(resolved.user._id);
+    res.json({
+      token,
+      user: userResponse(resolved.user),
+      restoredFromDeletion: resolved.restored,
+    });
   } catch (err) {
     if (err?.message?.includes('Wrong number of segments') || err?.message?.includes('Token used too early')) {
       return res.status(401).json({ message: 'Invalid Google token' });
@@ -194,6 +228,10 @@ router.post('/otp/send', async (req, res, next) => {
     if (purpose === 'login') {
       const existing = await User.findOne({ email });
       if (!existing) {
+        return res.status(404).json({ message: 'No account found. Create an account first.' });
+      }
+      if (existing.deletionScheduledAt && new Date(existing.deletionScheduledAt) <= new Date()) {
+        await purgeUserData(existing._id);
         return res.status(404).json({ message: 'No account found. Create an account first.' });
       }
     }
@@ -281,25 +319,32 @@ router.post('/otp/verify', async (req, res, next) => {
       if (!user) {
         return res.status(404).json({ message: 'No account found. Create an account first.' });
       }
-    } else {
-      if (!user) {
-        const displayName = String(name || '').trim();
-        if (!displayName) {
-          return res.status(400).json({ message: 'Name is required to create an account' });
-        }
-        user = await User.create({
-          name: displayName,
-          nameUr: nameUr ? String(nameUr).trim() : '',
-          email,
-          password: randomUnusedPassword(),
-          language: language || 'en',
-          currency: currency ? String(currency).toUpperCase() : 'PKR',
-        });
+    } else if (!user) {
+      const displayName = String(name || '').trim();
+      if (!displayName) {
+        return res.status(400).json({ message: 'Name is required to create an account' });
       }
+      user = await User.create({
+        name: displayName,
+        nameUr: nameUr ? String(nameUr).trim() : '',
+        email,
+        password: randomUnusedPassword(),
+        language: language || 'en',
+        currency: currency ? String(currency).toUpperCase() : 'PKR',
+      });
     }
 
-    const token = signToken(user._id);
-    res.json({ token, user: userResponse(user) });
+    const resolved = await finalizeSignIn(user);
+    if (resolved.purged || !resolved.user) {
+      return res.status(404).json({ message: 'No account found. Create an account first.' });
+    }
+
+    const token = signToken(resolved.user._id);
+    res.json({
+      token,
+      user: userResponse(resolved.user),
+      restoredFromDeletion: resolved.restored,
+    });
   } catch (err) {
     next(err);
   }
@@ -307,8 +352,14 @@ router.post('/otp/verify', async (req, res, next) => {
 
 router.get('/me', auth, async (req, res, next) => {
   try {
-    const user = await User.findById(req.userId);
+    let user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (user.deletionScheduledAt && new Date(user.deletionScheduledAt) <= new Date()) {
+      await purgeExpiredDeletions();
+      return res.status(401).json({ message: 'Account deleted' });
+    }
+
     res.json({ user: userResponse(user) });
   } catch (err) {
     next(err);
@@ -317,19 +368,18 @@ router.get('/me', auth, async (req, res, next) => {
 
 router.delete('/account', auth, async (req, res, next) => {
   try {
-    const userId = req.userId;
-    const { default: Transaction } = await import('../models/Transaction.js');
-    const { default: Contact } = await import('../models/Contact.js');
-    const { default: Goal } = await import('../models/Goal.js');
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    await Promise.all([
-      Transaction.deleteMany({ user: userId }),
-      Contact.deleteMany({ user: userId }),
-      Goal.deleteMany({ user: userId }),
-    ]);
-    await User.findByIdAndDelete(userId);
+    const due = deletionDueDate();
+    user.deletionScheduledAt = due;
+    await user.save();
 
-    res.json({ message: 'Account deleted' });
+    res.json({
+      message: 'Account scheduled for deletion',
+      deletionScheduledAt: due,
+      graceDays: 7,
+    });
   } catch (err) {
     next(err);
   }
