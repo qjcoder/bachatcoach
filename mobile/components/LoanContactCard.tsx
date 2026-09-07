@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { RTLRow } from '@/components/RTLRow';
 import { Brand, Radius } from '@/constants/theme';
+import { usePageChrome } from '@/hooks/usePageChrome';
 import { useLayoutScale } from '@/lib/layout';
 
 const AVATAR_COLORS = ['#10B981', '#3B82F6', '#EAB308', '#A78BFA', '#F97316', '#EC4899'] as const;
@@ -48,6 +49,7 @@ export function LoanContactCard({
   onLongPress,
 }: LoanContactCardProps) {
   const { s } = useLayoutScale();
+  const { text, muted, border, onBrand } = usePageChrome();
   const avatarBg = avatarColorForName(name);
   const statusColor =
     status === 'overdue' ? Brand.danger : status === 'repaid' ? Brand.secondary : tint;
@@ -57,29 +59,29 @@ export function LoanContactCard({
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.88 }]}>
+      style={({ pressed }) => [styles.row, { borderBottomColor: border }, pressed && { opacity: 0.88 }]}>
       <View style={[styles.avatar, { backgroundColor: avatarBg, width: s(44), height: s(44) }]}>
-        <AppText variant="bodySemibold" color="#FFFFFF">
+        <AppText variant="bodySemibold" color={onBrand}>
           {initialsForName(name)}
         </AppText>
       </View>
 
       <View style={styles.mid}>
-        <AppText variant="bodySemibold" color="#FFFFFF" numberOfLines={1}>
+        <AppText variant="bodySemibold" color={text} numberOfLines={1}>
           {name}
         </AppText>
         {purpose ? (
-          <AppText variant="caption" color="rgba(255,255,255,0.55)" numberOfLines={1}>
+          <AppText variant="caption" color={muted} numberOfLines={1}>
             {purpose}
           </AppText>
         ) : null}
-        <AppText variant="caption" color="rgba(255,255,255,0.42)" numberOfLines={1} style={styles.metaLine}>
+        <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaLine}>
           {openedLabel}
         </AppText>
         {dueLabel ? (
           <RTLRow gap={4} style={styles.dueRow}>
-            <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.42)" />
-            <AppText variant="caption" color="rgba(255,255,255,0.42)" numberOfLines={1}>
+            <Ionicons name="time-outline" size={12} color={muted} />
+            <AppText variant="caption" color={muted} numberOfLines={1}>
               {dueLabel}
             </AppText>
           </RTLRow>
@@ -87,7 +89,7 @@ export function LoanContactCard({
       </View>
 
       <View style={styles.right}>
-        <AppText variant="bodySemibold" color="#FFFFFF" numberOfLines={1} style={styles.amount}>
+        <AppText variant="bodySemibold" color={text} numberOfLines={1} style={styles.amount}>
           {amount}
         </AppText>
         <View style={[styles.badge, { borderColor: `${statusColor}88` }]}>
@@ -95,7 +97,7 @@ export function LoanContactCard({
             {statusLabel}
           </AppText>
         </View>
-        <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" style={styles.chevron} />
+        <Ionicons name="chevron-forward" size={16} color={muted} style={styles.chevron} />
       </View>
     </Pressable>
   );
@@ -160,7 +162,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   avatar: {
     borderRadius: 999,

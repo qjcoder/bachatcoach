@@ -192,7 +192,7 @@ export function DriveBackupSection({ rowTheme }: Props) {
           {t('backup.lastBackup')}: {lastLabel}
         </AppText>
 
-        <View style={[styles.sheetCard, { backgroundColor: scheme === 'dark' ? '#0F172A' : '#F8FAFC', borderColor: colors.border }]}>
+        <View style={[styles.sheetCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <SettingsMenuRow
             icon="cloud-upload-outline"
             label={t('backup.enable')}

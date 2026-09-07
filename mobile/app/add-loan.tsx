@@ -24,11 +24,8 @@ import { Radius, Spacing, TxnKind, TxnKindSoft, txnKindGradientDeep } from '@/co
 import { formatAmount } from '@/lib/format';
 import { getContactName } from '@/lib/contact';
 import { contactMatchesQuery, phoneKey } from '@/lib/phone';
+import { usePageChrome } from '@/hooks/usePageChrome';
 
-const BG = '#0A0F0E';
-const CARD = '#141A19';
-const CARD_BORDER = 'rgba(255,255,255,0.08)';
-const MUTED = 'rgba(255,255,255,0.55)';
 const H_PAD = 14;
 const HEADER_SIDE = 52;
 const SCREEN_H = Dimensions.get('window').height;
@@ -69,7 +66,7 @@ export default function AddLoanScreen() {
   const direction = resolveDirection(firstParam(params.direction));
   const isLent = direction === 'i_lent';
   const accent = isLent ? TxnKind.income : TxnKind.expense;
-  const soft = isLent ? TxnKindSoft.income : TxnKindSoft.expense;
+  const kindSoft = isLent ? TxnKindSoft.income : TxnKindSoft.expense;
   const gradient = isLent ? txnKindGradientDeep('income') : txnKindGradientDeep('expense');
 
   const { t, i18n } = useTranslation();
@@ -78,6 +75,7 @@ export default function AddLoanScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { bg, card, border, text, muted, soft, well, field, onBrand, isDark } = usePageChrome();
   const currency = getCurrency(user?.currency);
 
   const [amount, setAmount] = useState('');
@@ -269,20 +267,20 @@ export default function AddLoanScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: BG, paddingBottom: Math.max(insets.bottom, 6) }]}>
+    <View style={[styles.root, { backgroundColor: bg, paddingBottom: Math.max(insets.bottom, 6) }]}>
       <View style={{ paddingTop: Math.max(insets.top, 6) }}>
         <View style={[styles.topBar, { direction: 'ltr' }]}>
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/loans'))}
             hitSlop={10}
-            style={styles.headerBackBtn}
+            style={[styles.headerBackBtn, { backgroundColor: well }]}
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}>
-            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={22} color={text} />
           </Pressable>
           <View style={styles.topCenter} pointerEvents="none">
             <View style={styles.headerTitleRow}>
-              <AppText variant="h3" color="#FFFFFF" shrink>
+              <AppText variant="h3" color={text} shrink>
                 {titleHead}{' '}
               </AppText>
               <AppText variant="h3" color={accent} shrink>
@@ -291,7 +289,7 @@ export default function AddLoanScreen() {
             </View>
             <AppText
               variant="caption"
-              color={MUTED}
+              color={muted}
               numberOfLines={1}
               align="center"
               style={styles.headerSubtitle}>
@@ -319,7 +317,7 @@ export default function AddLoanScreen() {
                 styles.currencyChip,
                 { backgroundColor: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.22)' },
               ]}>
-              <AppText variant="captionBold" color="#FFFFFF">
+              <AppText variant="captionBold" color={onBrand}>
                 {currency.code}
               </AppText>
             </View>
@@ -329,20 +327,20 @@ export default function AddLoanScreen() {
               </AppText>
               <AppText
                 variant="h1"
-                color="#FFFFFF"
+                color={onBrand}
                 style={styles.amountValue}
                 numberOfLines={1}
                 adjustsFontSizeToFit>
                 {displayAmount}
               </AppText>
-              <View style={[styles.caret, { backgroundColor: '#FFFFFF' }]} />
+              <View style={[styles.caret, { backgroundColor: onBrand }]} />
             </View>
             <Ionicons name="calculator-outline" size={18} color="rgba(255,255,255,0.85)" />
           </RTLRow>
           <View style={styles.quickRow}>
             {QUICK_AMOUNTS.map((n) => (
               <Pressable key={n} onPress={() => bumpAmount(n)} style={styles.quickPill}>
-                <AppText variant="captionBold" color="#FFFFFF">
+                <AppText variant="captionBold" color={onBrand}>
                   +{n >= 1000 ? `${n / 1000}k` : n}
                 </AppText>
               </Pressable>
@@ -350,11 +348,11 @@ export default function AddLoanScreen() {
           </View>
         </LinearGradient>
 
-        <View style={[styles.panel, { borderColor: `${soft}28` }]}>
+        <View style={[styles.panel, { backgroundColor: card, borderColor: `${kindSoft}28` }]}>
           {!isEditing ? (
             <>
-              <View style={[styles.fieldRow, styles.fieldRowTight, { borderColor: CARD_BORDER }]}>
-                <Ionicons name="search-outline" size={16} color={MUTED} />
+              <View style={[styles.fieldRow, styles.fieldRowTight, { borderColor: border, backgroundColor: field }]}>
+                <Ionicons name="search-outline" size={16} color={muted} />
                 <TextInput
                   value={personQuery}
                   onChangeText={(v) => {
@@ -362,19 +360,19 @@ export default function AddLoanScreen() {
                     if (selectedId) clearPerson();
                   }}
                   placeholder={t('loans.searchPersonPlaceholder')}
-                  placeholderTextColor="rgba(255,255,255,0.35)"
-                  style={styles.fieldInput}
+                  placeholderTextColor={muted}
+                  style={[styles.fieldInput, { color: text }]}
                 />
                 {selectedId || personQuery ? (
                   <Pressable onPress={clearPerson} hitSlop={8}>
-                    <Ionicons name="close-circle" size={16} color={MUTED} />
+                    <Ionicons name="close-circle" size={16} color={muted} />
                   </Pressable>
                 ) : null}
               </View>
               {selectedId ? (
                 <View style={[styles.selectedCard, { backgroundColor: `${accent}14`, borderColor: `${accent}40` }]}>
                   <Ionicons name="checkmark-circle" size={16} color={accent} />
-                  <AppText variant="captionBold" color={soft} style={{ flex: 1 }} numberOfLines={1}>
+                  <AppText variant="captionBold" color={kindSoft} style={{ flex: 1 }} numberOfLines={1}>
                     {t('loans.existingPerson', { defaultValue: 'Adding to existing person' })}
                   </AppText>
                 </View>
@@ -385,12 +383,12 @@ export default function AddLoanScreen() {
                     <Pressable
                       key={person._id}
                       onPress={() => pickExisting(person)}
-                      style={[styles.suggestRow, { borderBottomColor: CARD_BORDER }]}>
+                      style={[styles.suggestRow, { borderBottomColor: border }]}>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <AppText variant="captionBold" color="#FFFFFF" numberOfLines={1}>
+                        <AppText variant="captionBold" color={text} numberOfLines={1}>
                           {getContactName(person, i18n.language)}
                         </AppText>
-                        <AppText variant="caption" color={MUTED} numberOfLines={1}>
+                        <AppText variant="caption" color={muted} numberOfLines={1}>
                           {person.phone || t('loans.noPhone')}
                         </AppText>
                       </View>
@@ -451,16 +449,16 @@ export default function AddLoanScreen() {
               <View style={styles.fieldHalf} />
             )}
             <View style={[styles.fieldWrap, styles.fieldHalf]}>
-              <AppText variant="label" color={MUTED} style={styles.fieldLabel}>
+              <AppText variant="label" color={muted} style={styles.fieldLabel}>
                 {t('loans.dueDate', { defaultValue: 'Due date' })}
               </AppText>
               <Pressable
                 onPress={() => setShowDuePicker(true)}
-                style={[styles.fieldRow, styles.fieldRowTight, { borderColor: CARD_BORDER }]}>
-                <Ionicons name="calendar-outline" size={16} color={soft} />
+                style={[styles.fieldRow, styles.fieldRowTight, { borderColor: border, backgroundColor: field }]}>
+                <Ionicons name="calendar-outline" size={16} color={kindSoft} />
                 <AppText
                   variant="caption"
-                  color={dueDate ? '#FFFFFF' : MUTED}
+                  color={dueDate ? text : muted}
                   numberOfLines={1}
                   style={{ flex: 1 }}>
                   {dueDate
@@ -469,10 +467,10 @@ export default function AddLoanScreen() {
                 </AppText>
                 {dueDate ? (
                   <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
-                    <Ionicons name="close-circle" size={16} color={MUTED} />
+                    <Ionicons name="close-circle" size={16} color={muted} />
                   </Pressable>
                 ) : (
-                  <Ionicons name="chevron-forward" size={14} color={MUTED} />
+                  <Ionicons name="chevron-forward" size={14} color={muted} />
                 )}
               </Pressable>
             </View>
@@ -495,11 +493,15 @@ export default function AddLoanScreen() {
                 <Pressable
                   key={key}
                   onPress={() => onKey(key)}
-                  style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}>
+                  style={({ pressed }) => [
+                    styles.key,
+                    { backgroundColor: field, borderColor: border },
+                    pressed && styles.keyPressed,
+                  ]}>
                   {key === 'back' ? (
-                    <Ionicons name="backspace-outline" size={18} color="#E2E8F0" />
+                    <Ionicons name="backspace-outline" size={18} color={soft} />
                   ) : (
-                    <AppText variant="h3" color="#F8FAFC" style={styles.keyText}>
+                    <AppText variant="h3" color={text} style={styles.keyText}>
                       {key}
                     </AppText>
                   )}
@@ -516,8 +518,8 @@ export default function AddLoanScreen() {
             end={{ x: 1, y: 0 }}
             style={[styles.saveBtn, loading && { opacity: 0.65 }]}>
             <RTLRow gap={8} style={{ justifyContent: 'center' }}>
-              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-              <AppText variant="button" color="#FFFFFF">
+              <Ionicons name="checkmark-circle" size={18} color={onBrand} />
+              <AppText variant="button" color={onBrand}>
                 {loading ? t('common.loading') : t('common.save')}
               </AppText>
             </RTLRow>
@@ -537,9 +539,9 @@ export default function AddLoanScreen() {
       {showDuePicker && Platform.OS === 'ios' ? (
         <Modal transparent animationType="slide" visible onRequestClose={() => setShowDuePicker(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShowDuePicker(false)} />
-          <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 12 }]}>
+          <View style={[styles.modalSheet, { backgroundColor: card, paddingBottom: insets.bottom + 12 }]}>
             <RTLRow style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-              <AppText variant="bodySemibold" color="#FFFFFF">
+              <AppText variant="bodySemibold" color={text}>
                 {t('loans.dueDate', { defaultValue: 'Due date' })}
               </AppText>
               <Pressable onPress={() => setShowDuePicker(false)}>
@@ -552,7 +554,7 @@ export default function AddLoanScreen() {
               value={dueDate || new Date()}
               mode="date"
               display="spinner"
-              themeVariant="dark"
+              themeVariant={isDark ? 'dark' : 'light'}
               onChange={onDueChange}
             />
           </View>
@@ -581,16 +583,17 @@ function Field({
   editable?: boolean;
   style?: object;
 }) {
+  const { muted, border, text, field } = usePageChrome();
   return (
     <View style={[styles.fieldWrap, style]}>
-      <AppText variant="label" color={MUTED} style={styles.fieldLabel}>
+      <AppText variant="label" color={muted} style={styles.fieldLabel}>
         {label}
       </AppText>
       <View
         style={[
           styles.fieldRow,
           styles.fieldRowTight,
-          { borderColor: CARD_BORDER, opacity: editable ? 1 : 0.65 },
+          { borderColor: border, backgroundColor: field, opacity: editable ? 1 : 0.65 },
         ]}>
         <Ionicons name={icon} size={16} color={accent} />
         <TextInput
@@ -598,8 +601,8 @@ function Field({
           onChangeText={onChangeText}
           editable={editable}
           keyboardType={keyboardType}
-          placeholderTextColor="rgba(255,255,255,0.35)"
-          style={styles.fieldInput}
+          placeholderTextColor={muted}
+          style={[styles.fieldInput, { color: text }]}
         />
       </View>
     </View>
@@ -619,7 +622,7 @@ const styles = StyleSheet.create({
   },
   topSideSpacer: { width: HEADER_SIDE },
   topCenter: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: HEADER_SIDE + 4,
@@ -632,7 +635,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
     zIndex: 3,
   },
   content: {
@@ -705,7 +707,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.22)',
   },
   panel: {
-    backgroundColor: CARD,
     borderRadius: Radius.lg,
     borderWidth: 1,
     padding: COMPACT ? 10 : 12,
@@ -725,13 +726,11 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: Radius.md,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.04)',
     paddingHorizontal: 10,
   },
   fieldRowTight: { minHeight: COMPACT ? 40 : 44 },
   fieldInput: {
     flex: 1,
-    color: '#FFFFFF',
     fontSize: 14.5,
     paddingVertical: 8,
   },
@@ -761,9 +760,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: KEY_H,
     borderRadius: 11,
-    backgroundColor: '#151C1A',
     borderWidth: 1,
-    borderColor: CARD_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -777,13 +774,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.55)' },
   modalSheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: CARD,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     padding: Spacing.md,

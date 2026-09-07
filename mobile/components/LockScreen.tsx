@@ -69,7 +69,7 @@ export default function LockScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.iconPlate}>
+      <View style={[styles.iconPlate, { backgroundColor: '#FFFFFF' }]}>
         <BrandLogo size={88} />
       </View>
       <AppText variant="h1" color={colors.text} style={styles.title}>
@@ -135,7 +135,6 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: '#000000',
     marginBottom: 16,
     alignItems: 'center',
     justifyContent: 'center',

@@ -22,13 +22,11 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { RTLRow } from '@/components/RTLRow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Radius, Spacing, TxnKind, TxnKindSoft } from '@/constants/theme';
+import { usePageChrome } from '@/hooks/usePageChrome';
 import { getContactName } from '@/lib/contact';
 import { contactMatchesQuery } from '@/lib/phone';
 import { localeForLanguage } from '@/lib/language';
 
-const PAGE_BG = '#020617';
-const CARD_BG = '#0F172A';
-const MUTED = 'rgba(255,255,255,0.55)';
 const LENT = TxnKind.income;
 const BORROWED = TxnKind.expense;
 const LENT_SOFT = TxnKindSoft.income;
@@ -85,6 +83,7 @@ export default function LoansScreen() {
   const formatPKR = useFormatPKR();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { bg, card, border, text, muted, onBrand, field } = usePageChrome();
 
   const [tab, setTab] = useState<'i_lent' | 'i_borrowed'>('i_lent');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -298,7 +297,7 @@ export default function LoansScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.container, { backgroundColor: bg, paddingTop: insets.top + 8 }]}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -317,10 +316,10 @@ export default function LoansScreen() {
         }
         showsVerticalScrollIndicator={false}>
         <View style={styles.headerText}>
-          <AppText variant="h2" color="#FFFFFF">
+          <AppText variant="h2" color={text}>
             {t('loans.title')}
           </AppText>
-          <AppText variant="bodySmall" color={MUTED}>
+          <AppText variant="bodySmall" color={muted}>
             {t('loans.pageTagline')}
           </AppText>
         </View>
@@ -333,7 +332,7 @@ export default function LoansScreen() {
           active={tab}
           onChange={setTab}
           accentColor={tabAccent}
-          trackColor="#1A1A1A"
+          trackColor={field}
         />
 
         <LinearGradient
@@ -366,7 +365,7 @@ export default function LoansScreen() {
               </AppText>
               <AppText
                 variant="amount"
-                color="#FFFFFF"
+                color={onBrand}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 style={styles.heroAmount}>
@@ -383,14 +382,14 @@ export default function LoansScreen() {
         </LinearGradient>
 
         <RTLRow style={styles.searchRow} gap={10}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.45)" />
+          <View style={[styles.searchBar, { backgroundColor: field, borderColor: border }]}>
+            <Ionicons name="search-outline" size={18} color={muted} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder={t('loans.searchPlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              style={styles.searchInput}
+              placeholderTextColor={muted}
+              style={[styles.searchInput, { color: text }]}
               returnKeyType="search"
               clearButtonMode="while-editing"
             />
@@ -399,6 +398,7 @@ export default function LoansScreen() {
             onPress={() => setFilterOpen(true)}
             style={[
               styles.filterBtn,
+              { backgroundColor: field, borderColor: border },
               (filterOpen || filterActive) && {
                 borderColor: `${tabAccent}66`,
                 backgroundColor: `${tabAccent}22`,
@@ -409,7 +409,7 @@ export default function LoansScreen() {
             <Ionicons
               name="options-outline"
               size={20}
-              color={filterOpen || filterActive ? tabAccent : '#FFFFFF'}
+              color={filterOpen || filterActive ? tabAccent : text}
             />
             {summary.overdueCount > 0 && statusFilter !== 'overdue' ? (
               <View style={styles.filterDot} />
@@ -419,13 +419,13 @@ export default function LoansScreen() {
 
         {/* Active tab list only — Given and Borrowed stay separate */}
         {tab === 'i_lent' ? (
-          <View style={[styles.section, { borderColor: `${LENT}40` }]}>
+          <View style={[styles.section, { backgroundColor: card, borderColor: `${LENT}40` }]}>
             <RTLRow style={styles.sectionHeader} gap={10}>
               <View style={[styles.sectionIcon, { backgroundColor: `${LENT}22` }]}>
                 <Ionicons name="hand-left-outline" size={16} color={LENT} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <AppText variant="bodySemibold" color="#FFFFFF" numberOfLines={1}>
+                <AppText variant="bodySemibold" color={text} numberOfLines={1}>
                   {t('loans.moneyYouGave', { defaultValue: 'Money You Gave to Others' })}
                 </AppText>
                 {metaLine(summary.totalLent, summary.lentPeople, summary.lentLoans, `${LENT}CC`)}
@@ -437,10 +437,10 @@ export default function LoansScreen() {
                 <View style={[styles.emptyIcon, { backgroundColor: `${LENT}14` }]}>
                   <Ionicons name="document-text-outline" size={28} color={`${LENT}88`} />
                 </View>
-                <AppText variant="bodySemibold" color="#FFFFFF" align="center">
+                <AppText variant="bodySemibold" color={text} align="center">
                   {t('loans.noLentYet', { defaultValue: 'No lent loans yet' })}
                 </AppText>
-                <AppText variant="caption" color={MUTED} align="center">
+                <AppText variant="caption" color={muted} align="center">
                   {t('loans.noLentHint', {
                     defaultValue: 'Add a loan when you lend money to someone.',
                   })}
@@ -448,7 +448,7 @@ export default function LoansScreen() {
                 <Pressable
                   onPress={() => openAddLoan('i_lent')}
                   style={[styles.emptyCta, { backgroundColor: LENT }]}>
-                  <AppText variant="captionBold" color="#FFFFFF">
+                  <AppText variant="captionBold" color={onBrand}>
                     + {t('loans.addLoanLent', { defaultValue: 'Add Loan (Lent)' })}
                   </AppText>
                 </Pressable>
@@ -480,13 +480,13 @@ export default function LoansScreen() {
             )}
           </View>
         ) : (
-          <View style={[styles.section, { borderColor: `${BORROWED}40` }]}>
+          <View style={[styles.section, { backgroundColor: card, borderColor: `${BORROWED}40` }]}>
             <RTLRow style={styles.sectionHeader} gap={10}>
               <View style={[styles.sectionIcon, { backgroundColor: `${BORROWED}22` }]}>
                 <Ionicons name="hand-right-outline" size={16} color={BORROWED} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <AppText variant="bodySemibold" color="#FFFFFF" numberOfLines={1}>
+                <AppText variant="bodySemibold" color={text} numberOfLines={1}>
                   {t('loans.moneyYouOwe', { defaultValue: 'Money You Owe to Others' })}
                 </AppText>
                 {metaLine(
@@ -503,10 +503,10 @@ export default function LoansScreen() {
                 <View style={[styles.emptyIcon, { backgroundColor: `${BORROWED}14` }]}>
                   <Ionicons name="document-text-outline" size={28} color={`${BORROWED}88`} />
                 </View>
-                <AppText variant="bodySemibold" color="#FFFFFF" align="center">
+                <AppText variant="bodySemibold" color={text} align="center">
                   {t('loans.noBorrowedYet', { defaultValue: 'No borrowed loans yet' })}
                 </AppText>
-                <AppText variant="caption" color={MUTED} align="center">
+                <AppText variant="caption" color={muted} align="center">
                   {t('loans.noBorrowedHint', {
                     defaultValue: 'Add a loan when you borrow money from someone.',
                   })}
@@ -517,7 +517,7 @@ export default function LoansScreen() {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.emptyCta}>
-                    <AppText variant="captionBold" color="#FFFFFF">
+                    <AppText variant="captionBold" color={onBrand}>
                       +{' '}
                       {t('loans.addBorrowedLoan', { defaultValue: 'Add Borrowed Loan' })}
                     </AppText>
@@ -562,7 +562,7 @@ export default function LoansScreen() {
         ]}
         accessibilityRole="button"
         accessibilityLabel={tab === 'i_lent' ? t('loans.addLoanLent') : t('loans.addLoanBorrowed')}>
-        <Ionicons name="add" size={28} color="#FFFFFF" />
+        <Ionicons name="add" size={28} color={onBrand} />
       </Pressable>
 
       <BottomSheet
@@ -570,7 +570,7 @@ export default function LoansScreen() {
         title={t('loans.filter', { defaultValue: 'Filter' })}
         onClose={() => setFilterOpen(false)}
         accentColor={tabAccent}>
-        <AppText variant="caption" color={MUTED} style={{ marginBottom: 10 }}>
+        <AppText variant="caption" color={muted} style={{ marginBottom: 10 }}>
           {t('loans.filterStatus', { defaultValue: 'Status' })}
         </AppText>
         <View style={styles.filterChips}>
@@ -582,9 +582,10 @@ export default function LoansScreen() {
                 onPress={() => setStatusFilter(chip.key)}
                 style={[
                   styles.filterChip,
+                  { backgroundColor: field, borderColor: border },
                   on && { backgroundColor: tabAccent, borderColor: tabAccent },
                 ]}>
-                <AppText variant="captionBold" color={on ? '#FFFFFF' : MUTED}>
+                <AppText variant="captionBold" color={on ? onBrand : muted}>
                   {chip.label}
                 </AppText>
                 {chip.key === 'overdue' && summary.overdueCount > 0 ? (
@@ -595,7 +596,7 @@ export default function LoansScreen() {
           })}
         </View>
 
-        <AppText variant="caption" color={MUTED} style={{ marginTop: 18, marginBottom: 10 }}>
+        <AppText variant="caption" color={muted} style={{ marginTop: 18, marginBottom: 10 }}>
           {t('loans.sortBy', { defaultValue: 'Sort by' })}
         </AppText>
         <View style={styles.filterChips}>
@@ -607,9 +608,10 @@ export default function LoansScreen() {
                 onPress={() => setSortKey(opt.key)}
                 style={[
                   styles.filterChip,
+                  { backgroundColor: field, borderColor: border },
                   on && { backgroundColor: tabAccent, borderColor: tabAccent },
                 ]}>
-                <AppText variant="captionBold" color={on ? '#FFFFFF' : MUTED}>
+                <AppText variant="captionBold" color={on ? onBrand : muted}>
                   {opt.label}
                 </AppText>
               </Pressable>
@@ -628,7 +630,7 @@ export default function LoansScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAGE_BG },
+  container: { flex: 1 },
   scrollContent: { paddingHorizontal: Spacing.md, gap: 14 },
   headerText: { gap: 4 },
   hero: {
@@ -681,16 +683,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#1E293B',
     borderRadius: Radius.full,
     paddingHorizontal: 14,
     height: 46,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   searchInput: {
     flex: 1,
-    color: '#FFFFFF',
     fontSize: 15,
     paddingVertical: 0,
   },
@@ -698,11 +697,9 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: '#1E293B',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   filterDot: {
     position: 'absolute',
@@ -725,9 +722,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: Radius.full,
-    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
   },
   overdueDot: {
     width: 7,
@@ -736,7 +731,6 @@ const styles = StyleSheet.create({
     backgroundColor: BORROWED,
   },
   section: {
-    backgroundColor: CARD_BG,
     borderRadius: Radius.lg,
     borderWidth: 1,
     padding: 14,

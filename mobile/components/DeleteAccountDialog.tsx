@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/AppText';
 import { ModalBackdrop } from '@/components/ModalBackdrop';
+import { useColorScheme, useColors } from '@/components/useColorScheme';
 import { AppPortal } from '@/context/BlurOverlayContext';
 import { Radius, Shadow } from '@/constants/theme';
 import { DarkChrome } from '@/constants/Colors';
@@ -17,14 +18,11 @@ import { DarkChrome } from '@/constants/Colors';
 const MASCOT = require('@/assets/images/miss-you-mascot.png');
 
 const GREEN = '#34D399';
-const CARD_BG = DarkChrome.dialog;
-const CARD_BORDER = DarkChrome.dialogBorder;
 const WARN_BG = 'rgba(225, 29, 72, 0.12)';
 const WARN_BORDER = 'rgba(251, 113, 133, 0.55)';
 const WARN_TITLE = '#FB7185';
 const WARN_BODY = 'rgba(251, 113, 133, 0.72)';
 const DELETE_BG = '#E11D48';
-const MUTED = 'rgba(255,255,255,0.55)';
 
 type Props = {
   visible: boolean;
@@ -36,6 +34,9 @@ type Props = {
 /** Pixel-matched delete-account confirmation from design mockup. */
 export function DeleteAccountDialog({ visible, busy, onClose, onConfirm }: Props) {
   const { t } = useTranslation();
+  const colors = useColors();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
 
   useEffect(() => {
     if (!visible) return;
@@ -51,15 +52,28 @@ export function DeleteAccountDialog({ visible, busy, onClose, onConfirm }: Props
       <View style={styles.overlay} pointerEvents="box-none">
         <ModalBackdrop onPress={() => !busy && onClose()} />
 
-        <View style={styles.card} accessibilityRole="alert">
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.card,
+              borderColor: isDark ? DarkChrome.dialogBorder : colors.border,
+            },
+          ]}
+          accessibilityRole="alert">
           <Pressable
             onPress={() => !busy && onClose()}
             hitSlop={12}
             disabled={busy}
             accessibilityLabel="Close"
             accessibilityRole="button"
-            style={styles.closeBtn}>
-            <Ionicons name="close" size={16} color="rgba(255,255,255,0.85)" />
+            style={[
+              styles.closeBtn,
+              {
+                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.field,
+              },
+            ]}>
+            <Ionicons name="close" size={16} color={colors.text} />
           </Pressable>
 
           <View style={styles.hero}>
@@ -67,12 +81,14 @@ export function DeleteAccountDialog({ visible, busy, onClose, onConfirm }: Props
             <AppText style={styles.script}>{t('settings.deleteMissScript')}</AppText>
           </View>
 
-          <AppText style={styles.title}>
+          <AppText style={[styles.title, { color: colors.text }]}>
             {t('settings.deleteMissTitlePrefix')}
             <AppText style={styles.titleAccent}>{t('settings.deleteMissTitleAccent')}</AppText>
           </AppText>
 
-          <AppText style={styles.body}>{t('settings.deleteMissBody')}</AppText>
+          <AppText style={[styles.body, { color: colors.muted }]}>
+            {t('settings.deleteMissBody')}
+          </AppText>
 
           <View style={styles.warnBox}>
             <View style={styles.warnIcon}>
@@ -88,17 +104,21 @@ export function DeleteAccountDialog({ visible, busy, onClose, onConfirm }: Props
             <Pressable
               onPress={onClose}
               disabled={busy}
-              style={({ pressed }) => [styles.stayBtn, pressed && styles.pressed]}>
+              style={({ pressed }) => [
+                styles.stayBtn,
+                { borderColor: colors.border, backgroundColor: colors.field },
+                pressed && styles.pressed,
+              ]}>
               <Ionicons name="leaf" size={18} color={GREEN} style={styles.btnIcon} />
               <View style={styles.btnCopy}>
                 <AppText
-                  style={styles.stayTitle}
+                  style={[styles.stayTitle, { color: colors.text }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}>
                   {t('settings.deleteMissStayTitle')}
                 </AppText>
-                <AppText style={styles.staySub} numberOfLines={1}>
+                <AppText style={[styles.staySub, { color: colors.muted }]} numberOfLines={1}>
                   {t('settings.deleteMissStaySub')}
                 </AppText>
               </View>
@@ -139,10 +159,8 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: CARD_BG,
     borderRadius: 28,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: CARD_BORDER,
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 18,
@@ -157,7 +175,6 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
@@ -186,7 +203,6 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-8deg' }],
   },
   title: {
-    color: '#FFFFFF',
     fontSize: 26,
     fontWeight: '800',
     textAlign: 'center',
@@ -200,7 +216,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   body: {
-    color: 'rgba(255,255,255,0.88)',
     fontSize: 14,
     lineHeight: 21,
     textAlign: 'center',
@@ -253,8 +268,6 @@ const styles = StyleSheet.create({
     minHeight: 64,
     borderRadius: Radius.md,
     borderWidth: 1.5,
-    borderColor: GREEN,
-    backgroundColor: 'rgba(30, 41, 59, 0.9)',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -281,13 +294,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   stayTitle: {
-    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 15,
   },
   staySub: {
-    color: MUTED,
     fontSize: 11,
     lineHeight: 14,
   },

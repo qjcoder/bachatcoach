@@ -1,5 +1,6 @@
 {
-  "width": 1200,
-  "height": 936,
-  "aspect": "1200:936"
+  "width": 1024,
+  "height": 1024,
+  "aspect": "1024:1024",
+  "android": "full-bleed"
 }

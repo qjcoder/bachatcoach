@@ -6,7 +6,6 @@ import {
   Pressable,
   I18nManager,
   Dimensions,
-  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -21,10 +20,10 @@ type SplashViewProps = {
   onFinish: () => void;
 };
 
-const SCREEN_W = Dimensions.get('window').width;
-const SCREEN_H = Dimensions.get('window').height;
-/** Large splash mark — fills width without edge crop */
-const LOGO_MAX_W = Math.min(SCREEN_W - 48, 360);
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const LOGO_SIZE = Math.min(168, Math.round(SCREEN_W * 0.4));
+const STACK_MAX = Math.min(SCREEN_W - 48, 360);
+const STACK_GAP = Math.min(24, SCREEN_H * 0.03);
 
 export function SplashView({ onFinish }: SplashViewProps) {
   const { t, i18n } = useTranslation();
@@ -73,44 +72,36 @@ export function SplashView({ onFinish }: SplashViewProps) {
         style={[
           styles.content,
           {
-            paddingTop: insets.top + 24,
+            paddingTop: insets.top + 16,
             paddingBottom: insets.bottom + 96,
             opacity: fadeAnim,
           },
         ]}>
-        <View style={styles.logoBlock}>
+        <View style={styles.centerStack}>
           <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
-            <BrandLogo mode="full" maxWidth={LOGO_MAX_W} />
+            <BrandLogo mode="lockup" size={LOGO_SIZE} />
           </Animated.View>
-        </View>
 
-        <View style={styles.quoteBlock}>
-          <ScrollView
-            style={styles.quoteScroll}
-            contentContainerStyle={styles.quoteScrollContent}
-            showsVerticalScrollIndicator={false}
-            bounces={false}>
-            <View style={styles.quoteBox}>
+          <View style={styles.quoteBox}>
+            <AppText
+              variant="body"
+              color="rgba(255,255,255,0.95)"
+              align="center"
+              style={styles.quote}
+              numberOfLines={5}>
+              "{dailyQuote.text}"
+            </AppText>
+            {dailyQuote.source ? (
               <AppText
-                variant="body"
-                color="rgba(255,255,255,0.95)"
+                variant="caption"
+                color="rgba(255,255,255,0.65)"
                 align="center"
-                style={styles.quote}
-                numberOfLines={5}>
-                "{dailyQuote.text}"
+                style={styles.source}
+                numberOfLines={1}>
+                — {dailyQuote.source}
               </AppText>
-              {dailyQuote.source ? (
-                <AppText
-                  variant="caption"
-                  color="rgba(255,255,255,0.65)"
-                  align="center"
-                  style={styles.source}
-                  numberOfLines={1}>
-                  — {dailyQuote.source}
-                </AppText>
-              ) : null}
-            </View>
-          </ScrollView>
+            ) : null}
+          </View>
         </View>
       </Animated.View>
 
@@ -150,7 +141,7 @@ const styles = StyleSheet.create({
     zIndex: 10000,
     elevation: 10000,
     backgroundColor: '#000000',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   pattern: { ...StyleSheet.absoluteFill },
   circle: {
@@ -165,28 +156,14 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  logoBlock: {
-    flex: 1,
-    width: '100%',
-    maxWidth: LOGO_MAX_W + 8,
-    alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 28,
   },
-  quoteBlock: {
+  centerStack: {
     width: '100%',
-    maxWidth: Math.min(SCREEN_W - 48, 360),
+    maxWidth: STACK_MAX,
     alignItems: 'center',
-    marginBottom: Math.min(24, SCREEN_H * 0.02),
-  },
-  quoteScroll: {
-    width: '100%',
-    maxHeight: SCREEN_H * 0.22,
-  },
-  quoteScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+    gap: STACK_GAP,
   },
   quoteBox: {
     paddingHorizontal: 18,

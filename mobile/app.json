@@ -2,7 +2,7 @@
   "expo": {
     "name": "BachatCoach",
     "slug": "bachatcoach",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": [
@@ -13,7 +13,8 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bachatcoach.app"
+      "bundleIdentifier": "com.bachatcoach.app",
+      "buildNumber": "20"
     },
     "android": {
       "package": "com.bachatcoach.app",
@@ -38,7 +39,7 @@
         {
           "backgroundColor": "#000000",
           "image": "./assets/images/splash-logo.png",
-          "imageWidth": 380,
+          "imageWidth": 220,
           "resizeMode": "contain"
         }
       ],

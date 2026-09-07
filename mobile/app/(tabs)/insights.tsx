@@ -12,6 +12,7 @@ import { getDailyQuote } from '@/lib/dailyQuotes';
 import { useAuth } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
 import { useUserDisplayName } from '@/hooks/useUserDisplayName';
+import { usePageChrome } from '@/hooks/usePageChrome';
 import { AppText } from '@/components/AppText';
 import { Card, CardHeader } from '@/components/Card';
 import { RTLRow } from '@/components/RTLRow';
@@ -24,12 +25,6 @@ import { getCurrency } from '@/constants/currencies';
 import { Brand, Radius, Spacing, TxnKind, categoryTint, txnKindGradient } from '@/constants/theme';
 import { localeForLanguage, scriptLanguage } from '@/lib/language';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const BG = '#020617';
-const CARD = '#0F172A';
-const CARD_BORDER = 'rgba(255,255,255,0.07)';
-const MUTED = 'rgba(255,255,255,0.55)';
-const TEXT = '#F8FAFC';
 
 type CategoryItem = { _id: string; total: number };
 
@@ -80,6 +75,7 @@ export default function InsightsScreen() {
   const currency = getCurrency(user?.currency);
   const insets = useSafeAreaInsets();
   const { textBlock, headingBlock } = useDirection();
+  const { bg, card, border, text, muted, well, chartEmpty } = usePageChrome();
   const [data, setData] = useState<InsightsData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<InsightsTab>('overview');
@@ -203,9 +199,11 @@ export default function InsightsScreen() {
     { key: 'report' as const, label: t('insights.tabReport') },
   ];
 
+  const panelChrome = { backgroundColor: card, borderColor: border };
+
   return (
     <DirectionScrollView
-      style={[styles.container, { backgroundColor: BG }]}
+      style={[styles.container, { backgroundColor: bg }]}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}
       refreshControl={
         <RefreshControl
@@ -219,10 +217,10 @@ export default function InsightsScreen() {
         />
       }>
       <View style={styles.header}>
-        <AppText variant="h1" color={TEXT} style={headingBlock}>
+        <AppText variant="h1" color={text} style={headingBlock}>
           {t('insights.title')}
         </AppText>
-        <AppText variant="bodySmall" color={MUTED} style={[styles.tagline, textBlock]}>
+        <AppText variant="bodySmall" color={muted} style={[styles.tagline, textBlock]}>
           {t('insights.pageTagline')}
         </AppText>
       </View>
@@ -231,12 +229,12 @@ export default function InsightsScreen() {
 
       {tab === 'overview' ? (
         <View style={styles.overview}>
-          <Card variant="elevated" style={styles.panel}>
+          <Card variant="elevated" style={[styles.panel, panelChrome]}>
             <CardHeader
               icon="heart-outline"
               title={t('insights.financialHealth')}
               iconColor={TxnKind.savings}
-              titleColor={TEXT}
+              titleColor={text}
             />
             <RTLRow style={styles.healthBody} gap={16}>
               <RingProgress
@@ -246,28 +244,30 @@ export default function InsightsScreen() {
                 trackColor="rgba(201,162,39,0.2)"
                 label={`${healthScore}`}
                 subLabel={t('insights.healthScore')}
+                labelColor={text}
+                subLabelColor={muted}
               />
               <View style={styles.healthCopy}>
-                <AppText variant="bodySemibold" color={TEXT} style={textBlock}>
+                <AppText variant="bodySemibold" color={text} style={textBlock}>
                   {t(healthLabelKey(healthScore))}
                 </AppText>
-                <AppText variant="caption" color={MUTED} style={[styles.healthHint, textBlock]}>
+                <AppText variant="caption" color={muted} style={[styles.healthHint, textBlock]}>
                   {t(healthHintKey(healthScore))}
                 </AppText>
                 <ProgressBar progress={healthScore} height={8} color={TxnKind.savings} />
-                <AppText variant="caption" color={MUTED} style={[styles.rateCaption, textBlock]}>
+                <AppText variant="caption" color={muted} style={[styles.rateCaption, textBlock]}>
                   {t('dashboard.savingsRate')}: {healthScore}%
                 </AppText>
               </View>
             </RTLRow>
           </Card>
 
-          <Card variant="elevated" style={styles.panel}>
+          <Card variant="elevated" style={[styles.panel, panelChrome]}>
             <CardHeader
               icon="analytics-outline"
               title={t('insights.monthCompare')}
               iconColor={Brand.primary}
-              titleColor={TEXT}
+              titleColor={text}
             />
             <CompareRow
               label={t('insights.incomeChange')}
@@ -296,24 +296,24 @@ export default function InsightsScreen() {
             />
           </Card>
 
-          <Card variant="elevated" style={styles.panel}>
+          <Card variant="elevated" style={[styles.panel, panelChrome]}>
             <CardHeader
               icon="pie-chart-outline"
               title={t('insights.categoryBreakdown')}
               iconColor={Brand.primary}
-              titleColor={TEXT}
+              titleColor={text}
             />
             <RTLRow style={styles.spendBody} gap={14}>
               <DonutChart
                 size={112}
                 strokeWidth={11}
-                slices={spendSlices.length ? spendSlices : [{ value: 1, color: 'rgba(255,255,255,0.12)' }]}
+                slices={spendSlices.length ? spendSlices : [{ value: 1, color: chartEmpty }]}
                 centerSubLabel={currency.code}
                 centerLabel={formatAmount(spendTotal, i18n.language)}
               />
               <View style={styles.legend}>
                 {spendSlices.length === 0 ? (
-                  <AppText variant="caption" color={MUTED} style={textBlock}>
+                  <AppText variant="caption" color={muted} style={textBlock}>
                     {t('expenses.noTransactions')}
                   </AppText>
                 ) : (
@@ -322,10 +322,10 @@ export default function InsightsScreen() {
                     return (
                       <RTLRow key={slice.id} gap={8} style={styles.legendRow}>
                         <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                        <AppText variant="caption" color={MUTED} style={{ flex: 1 }} numberOfLines={1}>
+                        <AppText variant="caption" color={muted} style={{ flex: 1 }} numberOfLines={1}>
                           {t(`categories.${slice.id}`, { defaultValue: slice.id })}
                         </AppText>
-                        <AppText variant="captionBold" color={TEXT}>
+                        <AppText variant="captionBold" color={text}>
                           {pct}%
                         </AppText>
                       </RTLRow>
@@ -337,12 +337,12 @@ export default function InsightsScreen() {
           </Card>
 
           {topInsights.length > 0 ? (
-            <Card variant="elevated" style={styles.panel}>
+            <Card variant="elevated" style={[styles.panel, panelChrome]}>
               <CardHeader
                 icon="bulb-outline"
                 title={t('insights.topInsights')}
                 iconColor={Brand.secondary}
-                titleColor={TEXT}
+                titleColor={text}
               />
               {topInsights.map((line, index) => (
                 <RTLRow key={`${index}-${line.slice(0, 12)}`} gap={10} style={styles.insightRow}>
@@ -351,7 +351,7 @@ export default function InsightsScreen() {
                       {index + 1}
                     </AppText>
                   </View>
-                  <AppText variant="bodySmall" color={MUTED} style={[styles.insightText, textBlock]}>
+                  <AppText variant="bodySmall" color={muted} style={[styles.insightText, textBlock]}>
                     {line}
                   </AppText>
                 </RTLRow>
@@ -412,34 +412,37 @@ export default function InsightsScreen() {
           </LinearGradient>
         </View>
       ) : (
-        <Card variant="elevated" style={styles.panel}>
+        <Card variant="elevated" style={[styles.panel, panelChrome]}>
           <CardHeader
             icon="document-text-outline"
             title={t('insights.monthlyReport')}
             iconColor={Brand.primary}
-            titleColor={TEXT}
+            titleColor={text}
           />
-          <AppText variant="caption" color={MUTED} style={[styles.reportHint, headingBlock]}>
+          <AppText variant="caption" color={muted} style={[styles.reportHint, headingBlock]}>
             {t('insights.reportYear')}
           </AppText>
           <RTLRow style={styles.yearRow} gap={12}>
-            <Pressable onPress={() => changeYear(-1)} style={styles.yearBtn}>
+            <Pressable onPress={() => changeYear(-1)} style={[styles.yearBtn, { borderColor: border, backgroundColor: well }]}>
               <Ionicons name="chevron-back" size={20} color={Brand.primary} />
             </Pressable>
-            <AppText variant="h3" color={TEXT} style={styles.yearLabel}>
+            <AppText variant="h3" color={text} style={styles.yearLabel}>
               {reportYear}
             </AppText>
             <Pressable
               onPress={() => changeYear(1)}
               disabled={reportYear >= new Date().getFullYear()}
-              style={[styles.yearBtn, { opacity: reportYear >= new Date().getFullYear() ? 0.4 : 1 }]}>
+              style={[
+                styles.yearBtn,
+                { borderColor: border, backgroundColor: well, opacity: reportYear >= new Date().getFullYear() ? 0.4 : 1 },
+              ]}>
               <Ionicons name="chevron-forward" size={20} color={Brand.primary} />
             </Pressable>
           </RTLRow>
 
-          <View style={styles.reportTable}>
-            <RTLRow style={styles.reportHeader} gap={4}>
-              <AppText variant="captionBold" color={MUTED} style={styles.colMonth} align="center">
+          <View style={[styles.reportTable, { borderColor: border }]}>
+            <RTLRow style={[styles.reportHeader, { backgroundColor: well }]} gap={4}>
+              <AppText variant="captionBold" color={muted} style={styles.colMonth} align="center">
                 {t('insights.reportMonth')}
               </AppText>
               <View style={styles.colNumWrap}>
@@ -459,8 +462,8 @@ export default function InsightsScreen() {
               </View>
             </RTLRow>
             {report?.months.map((row) => (
-              <RTLRow key={row.month} style={styles.reportRow} gap={4}>
-                <AppText variant="caption" color={TEXT} style={styles.colMonth} align="center">
+              <RTLRow key={row.month} style={[styles.reportRow, { borderBottomColor: border }]} gap={4}>
+                <AppText variant="caption" color={text} style={styles.colMonth} align="center">
                   {formatMonthShort(row.month)}
                 </AppText>
                 <View style={styles.colNumWrap}>
@@ -496,10 +499,12 @@ export default function InsightsScreen() {
               </RTLRow>
             ))}
             {report ? (
-              <RTLRow style={[styles.reportRow, styles.reportTotal]} gap={4}>
+              <RTLRow
+                style={[styles.reportRow, styles.reportTotal, { borderBottomColor: border, borderTopColor: border, backgroundColor: well }]}
+                gap={4}>
                 <AppText
                   variant="captionBold"
-                  color={TEXT}
+                  color={text}
                   style={styles.colMonth}
                   align="center"
                   numberOfLines={2}>
@@ -583,12 +588,13 @@ function CompareRow({
   last?: boolean;
 }) {
   const { textBlock } = useDirection();
-  const color = value === 0 ? MUTED : TxnKind[kind];
+  const { muted, border } = usePageChrome();
+  const color = value === 0 ? muted : TxnKind[kind];
   const icon = value === 0 ? 'remove' : value > 0 ? 'arrow-up' : 'arrow-down';
 
   return (
-    <RTLRow style={[styles.compareRow, last && styles.compareRowLast]} gap={8}>
-      <AppText variant="bodySmall" color={MUTED} style={[styles.compareLabel, textBlock]}>
+    <RTLRow style={[styles.compareRow, { borderBottomColor: border }, last && styles.compareRowLast]} gap={8}>
+      <AppText variant="bodySmall" color={muted} style={[styles.compareLabel, textBlock]}>
         {label}
       </AppText>
       <RTLRow gap={4} style={styles.compareValue}>
@@ -610,9 +616,7 @@ const styles = StyleSheet.create({
   overview: { marginTop: 4 },
   panel: {
     marginTop: 12,
-    backgroundColor: CARD,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
   },
   healthBody: { alignItems: 'center' },
   healthCopy: { flex: 1, minWidth: 0, gap: 8 },
@@ -671,15 +675,12 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   yearLabel: { minWidth: 72, textAlign: 'center' },
   reportTable: {
     borderWidth: 1,
-    borderColor: CARD_BORDER,
     borderRadius: Radius.md,
     overflow: 'hidden',
     marginBottom: 16,
@@ -687,19 +688,15 @@ const styles = StyleSheet.create({
   reportHeader: {
     paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   reportRow: {
     paddingHorizontal: 10,
     paddingVertical: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: CARD_BORDER,
   },
   reportTotal: {
     borderBottomWidth: 0,
     borderTopWidth: 1,
-    borderTopColor: CARD_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   colMonth: { flex: 1.1, textAlign: 'center' },
   colNumWrap: { flex: 1, minWidth: 0, justifyContent: 'center' },
@@ -714,7 +711,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: CARD_BORDER,
   },
   compareRowLast: { borderBottomWidth: 0 },
   compareLabel: { flex: 1 },

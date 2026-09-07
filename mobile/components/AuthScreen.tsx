@@ -71,7 +71,7 @@ export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProp
         bounces={false}>
 
         <View style={styles.hero}>
-          <BrandLogo mode="auth" size={64} style={styles.logo} />
+          <BrandLogo mode="auth" maxWidth={240} containerStyle={styles.logo} />
           {title ? (
             <View style={styles.titleSlot}>
               <AppText
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   blobM: { width: 160, height: 160, top: '40%', left: -50, backgroundColor: 'rgba(255,255,255,0.04)' },
 
   hero: { alignItems: 'center', marginBottom: 20, width: '100%' },
-  logo: { marginBottom: 8 },
+  logo: { marginBottom: 12 },
   titleSlot: {
     width: '100%',
     height: 34,

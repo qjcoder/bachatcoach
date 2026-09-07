@@ -119,7 +119,8 @@ async function main() {
   }
 
   async function splashWithLogo(w, h) {
-    const logoW = Math.round(w * 0.72);
+    // Keep native full-screen splash mark compact and centered
+    const logoW = Math.round(w * 0.38);
     const logoH = Math.round((fullMeta.height / fullMeta.width) * logoW);
     const resized = await sharp(fullBuffer).resize(logoW, logoH, { fit: 'inside' }).png().toBuffer();
 

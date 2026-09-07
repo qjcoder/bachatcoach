@@ -10,6 +10,8 @@ type RingProgressProps = {
   trackColor?: string;
   label: string;
   subLabel: string;
+  labelColor?: string;
+  subLabelColor?: string;
 };
 
 export function RingProgress({
@@ -20,6 +22,8 @@ export function RingProgress({
   trackColor = 'rgba(255,255,255,0.15)',
   label,
   subLabel,
+  labelColor = '#FFFFFF',
+  subLabelColor = 'rgba(255,255,255,0.72)',
 }: RingProgressProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -55,7 +59,7 @@ export function RingProgress({
       <View style={styles.center} pointerEvents="none">
         <AppText
           variant="h3"
-          color="#FFFFFF"
+          color={labelColor}
           align="center"
           numberOfLines={1}
           adjustsFontSizeToFit
@@ -65,7 +69,7 @@ export function RingProgress({
         </AppText>
         <AppText
           variant="caption"
-          color="rgba(255,255,255,0.72)"
+          color={subLabelColor}
           align="center"
           numberOfLines={1}
           adjustsFontSizeToFit

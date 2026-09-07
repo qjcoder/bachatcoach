@@ -1,6 +1,7 @@
 import { View, StyleSheet, Text } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 import { AppText } from '@/components/AppText';
+import { usePageChrome } from '@/hooks/usePageChrome';
 
 export type DonutSlice = {
   value: number;
@@ -22,8 +23,9 @@ export function DonutChart({
   slices,
   centerLabel,
   centerSubLabel,
-  trackColor = 'rgba(255,255,255,0.08)',
+  trackColor,
 }: DonutChartProps) {
+  const { text, muted, chartEmpty } = usePageChrome();
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const total = slices.reduce((sum, s) => sum + Math.max(0, s.value), 0) || 1;
@@ -38,7 +40,7 @@ export function DonutChart({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={trackColor}
+            stroke={trackColor ?? chartEmpty}
             strokeWidth={strokeWidth}
             fill="none"
           />
@@ -69,7 +71,7 @@ export function DonutChart({
         <View style={styles.center} pointerEvents="none">
           <View style={[styles.centerInner, { maxWidth: hole }]}>
             {centerSubLabel ? (
-              <AppText variant="caption" color="rgba(255,255,255,0.65)" align="center" numberOfLines={1}>
+              <AppText variant="caption" color={muted} align="center" numberOfLines={1}>
                 {centerSubLabel}
               </AppText>
             ) : null}
@@ -78,7 +80,7 @@ export function DonutChart({
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.55}
-                style={[styles.centerAmount, { maxWidth: hole }]}>
+                style={[styles.centerAmount, { maxWidth: hole, color: text }]}>
                 {centerLabel}
               </Text>
             ) : null}
@@ -101,7 +103,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   centerAmount: {
-    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',

@@ -10,6 +10,7 @@ import { useFormatPKR, formatAmount } from '@/lib/format';
 import { getCurrency } from '@/constants/currencies';
 import { useAuth } from '@/context/AuthContext';
 import { useUserDisplayName } from '@/hooks/useUserDisplayName';
+import { usePageChrome } from '@/hooks/usePageChrome';
 import { AppText } from '@/components/AppText';
 import { DirectionScrollView } from '@/components/DirectionScrollView';
 import { RTLRow } from '@/components/RTLRow';
@@ -21,10 +22,6 @@ import { getCategoryLabel } from '@/lib/category';
 import { Brand, Radius, Spacing, TxnKind, TxnKindSoft, TxnKindDeep, txnKindGradient, txnKindGradientDeep, categoryTint } from '@/constants/theme';
 import { resolveMoneyKind, moneyKindColor } from '@/lib/txnKind';
 
-const BG = '#020617';
-const CARD = '#0F172A';
-const CARD_BORDER = 'rgba(255,255,255,0.06)';
-const MUTED = 'rgba(255,255,255,0.55)';
 const SCREEN_W = Dimensions.get('window').width;
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -96,12 +93,14 @@ function formatShortDate(iso: string, lang: string) {
 
 function formatTodayBadge(lang: string) {
   try {
-    return new Date().toLocaleDateString(lang.startsWith('ur') ? 'ur-PK' : 'en-GB', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    // Fixed en-GB pattern so iOS/Android don't differ (Sep vs Sept)
+    const locale = lang.startsWith('ur') ? 'ur-PK' : 'en-GB';
+    const d = new Date();
+    const weekday = d.toLocaleDateString(locale, { weekday: 'short' });
+    const day = d.toLocaleDateString(locale, { day: 'numeric' });
+    const month = d.toLocaleDateString('en-US', { month: 'short' });
+    const year = d.toLocaleDateString(locale, { year: 'numeric' });
+    return `${weekday}, ${day} ${month} ${year}`;
   } catch {
     return '';
   }
@@ -120,20 +119,21 @@ function MetricTile({
   icon: keyof typeof Ionicons.glyphMap;
   colors: [string, string];
 }) {
+  const { card, border, text, muted } = usePageChrome();
   return (
-    <View style={styles.metricTile}>
+    <View style={[styles.metricTile, { backgroundColor: card, borderColor: border }]}>
       <RTLRow style={styles.metricHead} gap={8}>
         <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.metricIcon}>
           <Ionicons name={icon} size={14} color="#FFFFFF" />
         </LinearGradient>
-        <AppText variant="caption" color={MUTED} numberOfLines={1} style={styles.metricLabel}>
+        <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metricLabel}>
           {label}
         </AppText>
       </RTLRow>
       <RTLRow style={styles.metricValueRow} gap={6}>
         <AppText
           variant="bodySemibold"
-          color="#FFFFFF"
+          color={text}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.75}
@@ -158,6 +158,7 @@ export default function HomeScreen() {
   const currency = getCurrency(user?.currency || 'PKR');
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { bg, card, border, text, muted, well, chartEmpty } = usePageChrome();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -204,17 +205,17 @@ export default function HomeScreen() {
 
   return (
     <DirectionScrollView
-      style={[styles.root, { backgroundColor: BG }]}
+      style={[styles.root, { backgroundColor: bg }]}
       contentContainerStyle={{ paddingBottom: 20, paddingTop: insets.top + 8 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.success} />}
       showsVerticalScrollIndicator={false}>
       {/* Top brand row */}
       <RTLRow style={styles.topBar} gap={12}>
         <RTLRow gap={10} style={styles.brandBlock}>
-          <BrandLogo size={36} />
+          <BrandLogo size={44} />
           <View style={styles.brandText}>
             <RTLRow gap={0} style={styles.brandTitleRow}>
-              <AppText variant="h3" color="#FFFFFF">
+              <AppText variant="h3" color={text}>
                 Bachat
               </AppText>
               <AppText variant="h3" color={TxnKind.savings}>
@@ -223,16 +224,16 @@ export default function HomeScreen() {
             </RTLRow>
             <RTLRow gap={5} style={styles.dateInline}>
               <Ionicons name="calendar-outline" size={12} color={TxnKindSoft.income} />
-              <AppText variant="caption" color={MUTED} numberOfLines={1}>
+              <AppText variant="caption" color={muted} numberOfLines={1}>
                 {formatTodayBadge(i18n.language)}
               </AppText>
             </RTLRow>
           </View>
         </RTLRow>
         <RTLRow gap={10}>
-          <Pressable style={styles.iconBtn} hitSlop={8}>
-            <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
-            <View style={styles.notifDot} />
+          <Pressable style={[styles.iconBtn, { backgroundColor: well, borderColor: border }]} hitSlop={8}>
+            <Ionicons name="notifications-outline" size={20} color={text} />
+            <View style={[styles.notifDot, { borderColor: bg }]} />
           </Pressable>
           <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={8}>
             {user?.avatar ? (
@@ -319,7 +320,7 @@ export default function HomeScreen() {
 
       {/* Quick Add — immediately under Saved This Month */}
       <RTLRow style={styles.sectionHead} gap={8}>
-        <AppText variant="h3" color="#FFFFFF" style={{ flex: 1 }}>
+        <AppText variant="h3" color={text} style={{ flex: 1 }}>
           {t('dashboard.quickAdd')}
         </AppText>
         <Pressable onPress={() => router.push('/(tabs)/expenses')} hitSlop={8}>
@@ -422,21 +423,21 @@ export default function HomeScreen() {
       </View>
 
       {/* Monthly spending — full width: donut + legend */}
-      <View style={styles.panel}>
-        <AppText variant="bodySemibold" color="#FFFFFF" style={styles.panelTitle}>
+      <View style={[styles.panel, { backgroundColor: card, borderColor: border }]}>
+        <AppText variant="bodySemibold" color={text} style={styles.panelTitle}>
           {t('dashboard.monthlySpending')}
         </AppText>
         <RTLRow style={styles.spendBody} gap={14}>
           <DonutChart
             size={112}
             strokeWidth={11}
-            slices={spendSlices.length ? spendSlices : [{ value: 1, color: 'rgba(255,255,255,0.12)' }]}
+            slices={spendSlices.length ? spendSlices : [{ value: 1, color: chartEmpty }]}
             centerSubLabel={currency.code}
             centerLabel={formatAmount(spendTotal, i18n.language)}
           />
           <View style={styles.legend}>
             {spendSlices.length === 0 ? (
-              <AppText variant="caption" color={MUTED}>
+              <AppText variant="caption" color={muted}>
                 —
               </AppText>
             ) : (
@@ -445,10 +446,10 @@ export default function HomeScreen() {
                 return (
                   <RTLRow key={slice.id} gap={8} style={styles.legendRow}>
                     <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                    <AppText variant="caption" color={MUTED} style={{ flex: 1 }} numberOfLines={1}>
+                    <AppText variant="caption" color={muted} style={{ flex: 1 }} numberOfLines={1}>
                       {t(`categories.${slice.id}`, { defaultValue: slice.id })}
                     </AppText>
-                    <AppText variant="captionBold" color="#FFFFFF">
+                    <AppText variant="captionBold" color={text}>
                       {pct}%
                     </AppText>
                   </RTLRow>
@@ -460,12 +461,12 @@ export default function HomeScreen() {
       </View>
 
       {/* Recent transactions — full width for readable titles */}
-      <View style={styles.panel}>
-        <AppText variant="bodySemibold" color="#FFFFFF" style={styles.panelTitle}>
+      <View style={[styles.panel, { backgroundColor: card, borderColor: border }]}>
+        <AppText variant="bodySemibold" color={text} style={styles.panelTitle}>
           {t('dashboard.recentTransactions')}
         </AppText>
         {(summary?.recentTransactions || []).length === 0 ? (
-          <AppText variant="caption" color={MUTED}>
+          <AppText variant="caption" color={muted}>
             {t('dashboard.noRecent')}
           </AppText>
         ) : (
@@ -482,12 +483,15 @@ export default function HomeScreen() {
             const tint = moneyKindColor(kind);
             const isLast = index === list.length - 1;
             return (
-              <RTLRow key={txn._id} style={[styles.txnRow, isLast && styles.txnRowLast]} gap={10}>
+              <RTLRow
+                key={txn._id}
+                style={[styles.txnRow, { borderBottomColor: border }, isLast && styles.txnRowLast]}
+                gap={10}>
                 <View style={[styles.txnIcon, { backgroundColor: `${tint}22` }]}>
                   <Ionicons name={icon} size={15} color={tint} />
                 </View>
                 <View style={styles.txnBody}>
-                  <AppText variant="captionBold" color="#FFFFFF" numberOfLines={1}>
+                  <AppText variant="captionBold" color={text} numberOfLines={1}>
                     {title}
                   </AppText>
                 </View>
@@ -496,7 +500,7 @@ export default function HomeScreen() {
                     {isIncome ? '+' : isSavings ? '→' : '−'}
                     {formatPKR(txn.amount)}
                   </AppText>
-                  <AppText variant="caption" color={MUTED} numberOfLines={1} style={styles.txnDate}>
+                  <AppText variant="caption" color={muted} numberOfLines={1} style={styles.txnDate}>
                     {formatShortDate(txn.date, i18n.language)}
                   </AppText>
                 </View>
@@ -549,9 +553,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: CARD_BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -564,7 +566,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#EF4444',
     borderWidth: 1,
-    borderColor: BG,
   },
   avatarFallback: {
     width: 36,
@@ -652,12 +653,10 @@ const styles = StyleSheet.create({
   },
   metricTile: {
     width: (SCREEN_W - Spacing.md * 2 - 8) / 2,
-    backgroundColor: CARD,
     borderRadius: Radius.lg,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
   },
   metricHead: {
     marginBottom: 6,
@@ -710,11 +709,9 @@ const styles = StyleSheet.create({
   },
   panel: {
     marginHorizontal: Spacing.md,
-    backgroundColor: CARD,
     borderRadius: Radius.lg,
     padding: 14,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
     marginBottom: 10,
   },
   panelTitle: { marginBottom: 12 },
@@ -722,7 +719,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: CARD_BORDER,
   },
   txnRowLast: {
     borderBottomWidth: 0,

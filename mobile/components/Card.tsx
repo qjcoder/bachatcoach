@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { View, StyleSheet, Pressable, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Pressable, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
@@ -13,7 +13,7 @@ type CardVariant = 'default' | 'elevated' | 'soft' | 'outline';
 
 type CardProps = {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   variant?: CardVariant;
   accentColor?: string;
 };

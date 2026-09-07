@@ -43,15 +43,11 @@ import { SegmentedTabs } from '@/components/SegmentedTabs';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Brand, Radius, Spacing, TxnKind, TxnKindSoft, TxnKindDeep, categoryTint, categoryColorAt } from '@/constants/theme';
+import { usePageChrome } from '@/hooks/usePageChrome';
 import { hasReceipt } from '@/lib/googleDrive';
 import { localeForLanguage } from '@/lib/language';
 import type { MonthlyReportRow } from '@/lib/monthlyReportPdf';
 import { resolveMoneyKind, moneyKindColor } from '@/lib/txnKind';
-
-const BG = '#020617';
-const CARD = '#0F172A';
-const CARD_BORDER = 'rgba(255,255,255,0.06)';
-const MUTED = 'rgba(255,255,255,0.55)';
 
 type FlowMode = 'expense' | 'income' | 'savings';
 type MetricMode = 'amount' | 'count';
@@ -295,6 +291,7 @@ export default function ExpensesScreen() {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
+  const { bg, card, border, text, muted, chartEmpty, onBrand, field } = usePageChrome();
 
   const nowInit = new Date();
   const [flowMode, setFlowMode] = useState<FlowMode>('expense');
@@ -618,15 +615,17 @@ export default function ExpensesScreen() {
     const amountColor = txnTint(item);
 
     return (
-      <Pressable onPress={() => setSelected(item)} style={styles.txnRow}>
+      <Pressable
+        onPress={() => setSelected(item)}
+        style={[styles.txnRow, { backgroundColor: field, borderColor: border }]}>
         <View style={[styles.txnIcon, { backgroundColor: `${tint}33` }]}>
-          <Ionicons name={iconName} size={20} color="#FFFFFF" />
+          <Ionicons name={iconName} size={20} color={tint} />
         </View>
         <View style={styles.txnBody}>
-          <AppText variant="bodySemibold" color="#FFFFFF" numberOfLines={1}>
+          <AppText variant="bodySemibold" color={text} numberOfLines={1}>
             {title}
           </AppText>
-          <AppText variant="caption" color={MUTED} numberOfLines={1}>
+          <AppText variant="caption" color={muted} numberOfLines={1}>
             {meta}
           </AppText>
         </View>
@@ -634,7 +633,7 @@ export default function ExpensesScreen() {
           {isIncome ? '+ ' : savings ? '→ ' : '- '}
           {formatPKR(item.amount)}
         </AppText>
-        <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" />
+        <Ionicons name="chevron-forward" size={16} color={muted} />
       </Pressable>
     );
   };
@@ -707,7 +706,7 @@ export default function ExpensesScreen() {
             </AppText>
             <AppText
               variant="amount"
-              color="#FFFFFF"
+              color={onBrand}
               numberOfLines={1}
               adjustsFontSizeToFit
               style={styles.heroAmount}>
@@ -745,7 +744,7 @@ export default function ExpensesScreen() {
                 ]}>
                 <AppText
                   variant="captionBold"
-                  color={metricMode === 'amount' ? '#FFFFFF' : 'rgba(255,255,255,0.72)'}>
+                  color={metricMode === 'amount' ? onBrand : 'rgba(255,255,255,0.72)'}>
                   {t('expenses.metricAmount', { defaultValue: 'Amount' })}
                 </AppText>
               </Pressable>
@@ -757,7 +756,7 @@ export default function ExpensesScreen() {
                 ]}>
                 <AppText
                   variant="captionBold"
-                  color={metricMode === 'count' ? '#FFFFFF' : 'rgba(255,255,255,0.72)'}>
+                  color={metricMode === 'count' ? onBrand : 'rgba(255,255,255,0.72)'}>
                   {t('expenses.metricCount', { defaultValue: 'Count' })}
                 </AppText>
               </Pressable>
@@ -774,21 +773,22 @@ export default function ExpensesScreen() {
         </RTLRow>
       </LinearGradient>
 
-      <View style={[styles.panel, { borderColor: `${flowSoft}28` }]}>
-        <AppText variant="bodySemibold" color="#FFFFFF" style={styles.panelTitle}>
+      <View style={[styles.panel, { backgroundColor: card, borderColor: border }]}>
+        <AppText variant="bodySemibold" color={text} style={styles.panelTitle}>
           {categoryPanelTitle}
         </AppText>
         <RTLRow style={styles.spendBody} gap={14}>
           <DonutChart
             size={112}
             strokeWidth={11}
-            slices={spendSlices.length ? spendSlices : [{ value: 1, color: 'rgba(255,255,255,0.12)' }]}
+            slices={spendSlices.length ? spendSlices : [{ value: 1, color: chartEmpty }]}
+            trackColor={chartEmpty}
             centerSubLabel={currency.code}
             centerLabel={formatAmount(spendTotal, i18n.language)}
           />
           <View style={styles.legend}>
             {spendSlices.length === 0 ? (
-              <AppText variant="caption" color={MUTED}>
+              <AppText variant="caption" color={muted}>
                 —
               </AppText>
             ) : (
@@ -800,10 +800,10 @@ export default function ExpensesScreen() {
                 return (
                   <RTLRow key={slice.id} gap={8} style={styles.legendRow}>
                     <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                    <AppText variant="caption" color={MUTED} style={{ flex: 1 }} numberOfLines={1}>
+                    <AppText variant="caption" color={muted} style={{ flex: 1 }} numberOfLines={1}>
                       {legendLabel}
                     </AppText>
-                    <AppText variant="captionBold" color="#FFFFFF">
+                    <AppText variant="captionBold" color={text}>
                       {pct}%
                     </AppText>
                   </RTLRow>
@@ -815,14 +815,14 @@ export default function ExpensesScreen() {
       </View>
 
       <RTLRow style={styles.searchRow} gap={10}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.45)" />
+        <View style={[styles.searchBar, { backgroundColor: field, borderColor: border }]}>
+          <Ionicons name="search-outline" size={18} color={muted} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={t('expenses.searchPlaceholder', { defaultValue: 'Search transactions...' })}
-            placeholderTextColor="rgba(255,255,255,0.4)"
-            style={styles.searchInput}
+            placeholderTextColor={muted}
+            style={[styles.searchInput, { color: text }]}
             returnKeyType="search"
             clearButtonMode="while-editing"
           />
@@ -831,6 +831,7 @@ export default function ExpensesScreen() {
           onPress={() => setFilterOpen(true)}
           style={[
             styles.filterBtn,
+            { backgroundColor: field, borderColor: border },
             filterOpen && {
               borderColor: `${flowAccent}66`,
               backgroundColor: `${flowAccent}22`,
@@ -838,19 +839,19 @@ export default function ExpensesScreen() {
           ]}
           accessibilityRole="button"
           accessibilityLabel={t('expenses.filter', { defaultValue: 'Filter' })}>
-          <Ionicons name="options-outline" size={20} color={filterOpen ? flowAccent : '#FFFFFF'} />
+          <Ionicons name="options-outline" size={20} color={filterOpen ? flowAccent : text} />
         </Pressable>
       </RTLRow>
     </View>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: BG, paddingTop: insets.top + 8 }]}>
+    <View style={[styles.container, { backgroundColor: bg, paddingTop: insets.top + 8 }]}>
       <View style={styles.pageHeader}>
-        <AppText variant="h2" color="#FFFFFF">
+        <AppText variant="h2" color={text}>
           {t('expenses.pageTitle', { defaultValue: 'Cashflow' })}
         </AppText>
-        <AppText variant="bodySmall" color={MUTED} style={styles.pageTagline}>
+        <AppText variant="bodySmall" color={muted} style={styles.pageTagline}>
           {t('expenses.pageTagline', {
             defaultValue: 'Track money in, out, and saved.',
           })}
@@ -858,7 +859,13 @@ export default function ExpensesScreen() {
       </View>
 
       <View style={styles.flowTabs}>
-        <SegmentedTabs tabs={flowTabs} active={flowMode} onChange={setFlowMode} accentColor={flowAccent} />
+        <SegmentedTabs
+          tabs={flowTabs}
+          active={flowMode}
+          onChange={setFlowMode}
+          accentColor={flowAccent}
+          trackColor={field}
+        />
       </View>
 
       <SectionList
@@ -893,10 +900,10 @@ export default function ExpensesScreen() {
         }
         renderSectionHeader={({ section }) => (
           <RTLRow style={styles.sectionHead} gap={8}>
-            <AppText variant="bodySemibold" color="#FFFFFF" style={{ flex: 1 }}>
+            <AppText variant="bodySemibold" color={text} style={{ flex: 1 }}>
               {section.title}
             </AppText>
-            <AppText variant="caption" color={MUTED}>
+            <AppText variant="caption" color={muted}>
               {formatPKR(section.dayTotal)}
             </AppText>
           </RTLRow>
@@ -919,7 +926,7 @@ export default function ExpensesScreen() {
               ? t('expenses.addSavings')
               : t('expenses.addExpense')
         }>
-        <Ionicons name="add" size={28} color="#FFFFFF" />
+        <Ionicons name="add" size={28} color={onBrand} />
       </Pressable>
 
       <BottomSheet visible={!!selected} title={t('expenses.details')} onClose={closeDetails}>
@@ -1023,7 +1030,7 @@ export default function ExpensesScreen() {
         title={t('expenses.filter', { defaultValue: 'Filter' })}
         onClose={() => setFilterOpen(false)}
         accentColor={flowAccent}>
-        <AppText variant="caption" color={MUTED} style={{ marginBottom: 10 }}>
+        <AppText variant="caption" color={muted} style={{ marginBottom: 10 }}>
           {t('expenses.filterPeriod', { defaultValue: 'Period' })}
         </AppText>
         <View style={styles.filterChips}>
@@ -1038,9 +1045,10 @@ export default function ExpensesScreen() {
                 }}
                 style={[
                   styles.filterChip,
+                  { backgroundColor: field, borderColor: border },
                   on && { backgroundColor: flowAccent, borderColor: flowAccent },
                 ]}>
-                <AppText variant="captionBold" color={on ? '#FFFFFF' : MUTED}>
+                <AppText variant="captionBold" color={on ? onBrand : muted}>
                   {tab.label}
                 </AppText>
               </Pressable>
@@ -1063,7 +1071,7 @@ function DetailRow({
 }: {
   label: string;
   value: string;
-  colors: (typeof Colors)['light'];
+  colors: { text: string; muted: string; border: string };
   muted?: boolean;
   onPress?: () => void;
 }) {
@@ -1117,16 +1125,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#1E293B',
     borderRadius: Radius.full,
     paddingHorizontal: 14,
     height: 46,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   searchInput: {
     flex: 1,
-    color: '#FFFFFF',
     fontSize: 15,
     paddingVertical: 0,
   },
@@ -1134,11 +1139,9 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: '#1E293B',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   filterChips: {
     flexDirection: 'row',
@@ -1149,9 +1152,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: Radius.full,
-    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
   },
   sectionHead: {
     paddingHorizontal: 2,
@@ -1163,13 +1164,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#1E293B',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
   },
   txnIcon: {
     width: 42,
@@ -1248,7 +1247,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   panel: {
-    backgroundColor: CARD,
     borderRadius: Radius.lg,
     padding: 14,
     borderWidth: 1,

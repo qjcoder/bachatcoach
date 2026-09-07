@@ -30,11 +30,8 @@ import { uploadReceiptToDrive } from '@/lib/googleDrive';
 import { formatAmount, formatTransactionTime } from '@/lib/format';
 import { localeForLanguage, scriptLanguage } from '@/lib/language';
 import { getDailyQuote } from '@/lib/dailyQuotes';
+import { usePageChrome } from '@/hooks/usePageChrome';
 
-const BG = '#0A0F0E';
-const CARD = '#141A19';
-const CARD_BORDER = 'rgba(255,255,255,0.08)';
-const MUTED = 'rgba(255,255,255,0.55)';
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
 const H_PAD = 14;
@@ -150,6 +147,7 @@ export default function AddTransactionScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { bg, card, border, text, muted, soft, well, field, onBrand, isDark } = usePageChrome();
   const currency = getCurrency(user?.currency);
 
   const categories = useMemo(() => {
@@ -438,20 +436,20 @@ export default function AddTransactionScreen() {
         : t('expenses.saveExpense');
 
   return (
-    <View style={[styles.root, { backgroundColor: BG, paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[styles.root, { backgroundColor: bg, paddingBottom: Math.max(insets.bottom, 8) }]}>
       {/* In-screen header — title absolute-centered on screen */}
       <View style={{ paddingTop: Math.max(insets.top, 8) }}>
         <View style={styles.topBar}>
           <View style={styles.topCenter} pointerEvents="none">
             <View style={styles.headerTitleRow}>
-              <AppText variant="h3" color="#FFFFFF" shrink>
+              <AppText variant="h3" color={text} shrink>
                 {titleHead}{' '}
               </AppText>
               <AppText variant="h3" color={accent} shrink>
                 {titleTail}
               </AppText>
             </View>
-            <AppText variant="caption" color={MUTED} numberOfLines={1} align="center" style={styles.headerSubtitle}>
+            <AppText variant="caption" color={muted} numberOfLines={1} align="center" style={styles.headerSubtitle}>
               {titleTagline}
             </AppText>
           </View>
@@ -462,12 +460,15 @@ export default function AddTransactionScreen() {
               style={styles.headerBackBtn}
               accessibilityRole="button"
               accessibilityLabel={t('common.back')}>
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-back" size={24} color={text} />
             </Pressable>
           </View>
           <View style={[styles.topSide, styles.topSideEnd]}>
             {!isSavings ? (
-              <Pressable onPress={scanReceipt} hitSlop={8} style={[styles.scanChip, { borderColor: `${accent}66` }]}>
+              <Pressable
+                onPress={scanReceipt}
+                hitSlop={8}
+                style={[styles.scanChip, { borderColor: `${accent}66`, backgroundColor: well }]}>
                 <Ionicons name="document-text-outline" size={15} color={accent} />
                 <AppText variant="captionBold" color={accent} shrink>
                   {t('expenses.scanShort')}
@@ -498,7 +499,7 @@ export default function AddTransactionScreen() {
                 styles.currencyChip,
                 { backgroundColor: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.22)' },
               ]}>
-              <AppText variant="captionBold" color="#FFFFFF">
+              <AppText variant="captionBold" color={onBrand}>
                 {currency.code}
               </AppText>
             </View>
@@ -508,13 +509,13 @@ export default function AddTransactionScreen() {
               </AppText>
               <AppText
                 variant="h1"
-                color="#FFFFFF"
+                color={onBrand}
                 style={styles.amountValue}
                 numberOfLines={1}
                 adjustsFontSizeToFit>
                 {displayAmount}
               </AppText>
-              <View style={[styles.caret, { backgroundColor: '#FFFFFF' }]} />
+              <View style={[styles.caret, { backgroundColor: onBrand }]} />
             </View>
             <Ionicons name="calculator-outline" size={20} color="rgba(255,255,255,0.85)" />
           </RTLRow>
@@ -524,7 +525,7 @@ export default function AddTransactionScreen() {
                 key={n}
                 onPress={() => (isSavings ? applyPercent(n) : bumpAmount(n))}
                 style={[styles.quickPill, isSavings && monthIncome <= 0 && styles.quickPillDisabled]}>
-                <AppText variant="label" color="#FFFFFF" style={styles.quickPillText}>
+                <AppText variant="label" color={onBrand} style={styles.quickPillText}>
                   {isSavings ? `${n}%` : `+${n >= 1000 ? `${n / 1000}k` : n}`}
                 </AppText>
               </Pressable>
@@ -559,12 +560,12 @@ export default function AddTransactionScreen() {
                     {
                       width: CAT_SIZE,
                       borderColor: selected ? accent : 'transparent',
-                      backgroundColor: selected ? `${accent}18` : '#171E1C',
+                      backgroundColor: selected ? `${accent}18` : field,
                     },
                   ]}>
                   {selected ? (
                     <View style={[styles.checkBadge, { backgroundColor: accent }]}>
-                      <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+                      <Ionicons name="checkmark" size={9} color={onBrand} />
                     </View>
                   ) : null}
                   <View style={[styles.catIcon, { backgroundColor: `${color}28` }]}>
@@ -572,7 +573,7 @@ export default function AddTransactionScreen() {
                   </View>
                   <AppText
                     variant="captionBold"
-                    color={selected ? '#FFFFFF' : MUTED}
+                    color={selected ? text : muted}
                     align="center"
                     numberOfLines={1}
                     adjustsFontSizeToFit
@@ -588,53 +589,53 @@ export default function AddTransactionScreen() {
 
         {!isSavings && isOtherCategory(category) ? (
           <TextInput
-            style={styles.customInput}
+            style={[styles.customInput, { borderColor: border, backgroundColor: field, color: text }]}
             value={customCategory}
             onChangeText={setCustomCategory}
             placeholder={t('expenses.customCategoryPlaceholder')}
-            placeholderTextColor={MUTED}
+            placeholderTextColor={muted}
           />
         ) : null}
 
         {/* Date / Time / Payment — outlined pills on strip */}
-        <View style={styles.metaStrip}>
+        <View style={[styles.metaStrip, { backgroundColor: card, borderColor: border }]}>
           <RTLRow style={styles.metaRow} gap={6}>
-            <Pressable onPress={() => setPickerMode('date')} style={styles.metaChip}>
+            <Pressable onPress={() => setPickerMode('date')} style={[styles.metaChip, { borderColor: border }]}>
               <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22` }]}>
                 <Ionicons name="calendar-outline" size={13} color={accent} />
               </View>
               <View style={styles.metaCopy}>
-                <AppText variant="caption" color={MUTED} numberOfLines={1} style={styles.metaHint}>
+                <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
                   {t('expenses.date')}
                 </AppText>
-                <AppText variant="captionBold" color="#FFFFFF" numberOfLines={1}>
+                <AppText variant="captionBold" color={text} numberOfLines={1}>
                   {dateLabel}
                 </AppText>
               </View>
             </Pressable>
-            <Pressable onPress={() => setPickerMode('time')} style={styles.metaChip}>
+            <Pressable onPress={() => setPickerMode('time')} style={[styles.metaChip, { borderColor: border }]}>
               <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22` }]}>
                 <Ionicons name="time-outline" size={13} color={accent} />
               </View>
               <View style={styles.metaCopy}>
-                <AppText variant="caption" color={MUTED} numberOfLines={1} style={styles.metaHint}>
+                <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
                   {t('expenses.time')}
                 </AppText>
-                <AppText variant="captionBold" color="#FFFFFF" numberOfLines={1}>
+                <AppText variant="captionBold" color={text} numberOfLines={1}>
                   {timeLabel}
                 </AppText>
               </View>
             </Pressable>
             {!isIncome ? (
-              <Pressable onPress={() => setPayOpen(true)} style={styles.metaChip}>
+              <Pressable onPress={() => setPayOpen(true)} style={[styles.metaChip, { borderColor: border }]}>
                 <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22` }]}>
                   <Ionicons name={PAYMENT_ICONS[paymentMethod] || 'wallet'} size={13} color={accent} />
                 </View>
                 <View style={styles.metaCopy}>
-                  <AppText variant="caption" color={MUTED} numberOfLines={1} style={styles.metaHint}>
+                  <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
                     {isSavings ? t('expenses.fromShort') : t('expenses.payShort')}
                   </AppText>
-                  <AppText variant="captionBold" color="#FFFFFF" numberOfLines={1}>
+                  <AppText variant="captionBold" color={text} numberOfLines={1}>
                     {t(`paymentMethods.${paymentMethod}`)}
                   </AppText>
                 </View>
@@ -647,41 +648,41 @@ export default function AddTransactionScreen() {
         {!isSavings ? (
           <RTLRow style={styles.attachRow} gap={8}>
             {receipt?.uri ? (
-              <View style={styles.photoPreview}>
+              <View style={[styles.photoPreview, { borderColor: border }]}>
                 <Image source={{ uri: receipt.uri }} style={styles.photoImg} />
                 <Pressable onPress={() => setReceipt(null)} style={styles.photoRemove}>
-                  <Ionicons name="close" size={11} color="#FFFFFF" />
+                  <Ionicons name="close" size={11} color={onBrand} />
                 </Pressable>
               </View>
             ) : (
               <Pressable
                 onPress={pickGallery}
                 onLongPress={scanReceipt}
-                style={[styles.addPhoto, { borderColor: `${accent}55` }]}>
+                style={[styles.addPhoto, { borderColor: `${accent}55`, backgroundColor: well }]}>
                 <Ionicons name="camera-outline" size={20} color={accent} />
               </Pressable>
             )}
-            <View style={styles.noteBox}>
+            <View style={[styles.noteBox, { borderBottomColor: border, backgroundColor: field }]}>
               <TextInput
-                style={styles.noteInput}
+                style={[styles.noteInput, { color: text }]}
                 value={note}
                 onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
                 placeholder={t('expenses.noteShort')}
-                placeholderTextColor={MUTED}
+                placeholderTextColor={muted}
                 multiline
                 maxLength={NOTE_MAX}
               />
             </View>
           </RTLRow>
         ) : (
-          <View style={[styles.noteBox, styles.savingsNote]}>
+          <View style={[styles.noteBox, styles.savingsNote, { borderBottomColor: border, backgroundColor: field }]}>
             <Ionicons name="bookmark-outline" size={16} color={accent} style={styles.savingsNoteIcon} />
             <TextInput
-              style={styles.noteInput}
+              style={[styles.noteInput, { color: text }]}
               value={note}
               onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
               placeholder={t('expenses.savingsNotePlaceholder')}
-              placeholderTextColor={MUTED}
+              placeholderTextColor={muted}
               maxLength={NOTE_MAX}
               returnKeyType="done"
               blurOnSubmit
@@ -723,7 +724,7 @@ export default function AddTransactionScreen() {
         )}
 
         {/* Keypad — fixed size (same on all types) */}
-        <View style={styles.keypadTray}>
+        <View style={[styles.keypadTray, { backgroundColor: card, borderColor: border }]}>
           {(
             [
               ['1', '2', '3'],
@@ -737,11 +738,15 @@ export default function AddTransactionScreen() {
                 <Pressable
                   key={key}
                   onPress={() => onKey(key)}
-                  style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}>
+                  style={({ pressed }) => [
+                    styles.key,
+                    { backgroundColor: field },
+                    pressed && { backgroundColor: well },
+                  ]}>
                   {key === 'back' ? (
-                    <Ionicons name="backspace-outline" size={20} color="#E2E8F0" />
+                    <Ionicons name="backspace-outline" size={20} color={soft} />
                   ) : (
-                    <AppText variant="h3" color="#F8FAFC" style={styles.keyText}>
+                    <AppText variant="h3" color={text} style={styles.keyText}>
                       {key}
                     </AppText>
                   )}
@@ -761,8 +766,8 @@ export default function AddTransactionScreen() {
             end={{ x: 1, y: 0 }}
             style={[styles.saveBtn, (loading || loadingEntry) && { opacity: 0.65 }]}>
             <RTLRow gap={8} style={{ justifyContent: 'center' }}>
-              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-              <AppText variant="button" color="#FFFFFF">
+              <Ionicons name="checkmark-circle" size={18} color={onBrand} />
+              <AppText variant="button" color={onBrand}>
                 {saveLabel}
               </AppText>
             </RTLRow>
@@ -774,9 +779,9 @@ export default function AddTransactionScreen() {
       {pickerMode && Platform.OS === 'ios' ? (
         <Modal transparent animationType="slide" visible onRequestClose={() => setPickerMode(null)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setPickerMode(null)} />
-          <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 12 }]}>
+          <View style={[styles.modalSheet, { backgroundColor: card, paddingBottom: insets.bottom + 12 }]}>
             <RTLRow style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-              <AppText variant="bodySemibold" color="#FFFFFF">
+              <AppText variant="bodySemibold" color={text}>
                 {pickerMode === 'date' ? t('expenses.date') : t('expenses.time')}
               </AppText>
               <Pressable onPress={() => setPickerMode(null)} hitSlop={10}>
@@ -790,7 +795,7 @@ export default function AddTransactionScreen() {
               mode={pickerMode}
               display="spinner"
               onChange={onPickerChange}
-              themeVariant="dark"
+              themeVariant={isDark ? 'dark' : 'light'}
               maximumDate={pickerMode === 'date' ? new Date() : undefined}
             />
           </View>
@@ -809,8 +814,8 @@ export default function AddTransactionScreen() {
       {/* Payment picker */}
       <Modal transparent animationType="fade" visible={payOpen} onRequestClose={() => setPayOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setPayOpen(false)} />
-        <View style={[styles.paySheet, { paddingBottom: insets.bottom + 16 }]}>
-          <AppText variant="bodySemibold" color="#FFFFFF" style={{ marginBottom: 12 }}>
+        <View style={[styles.paySheet, { backgroundColor: card, borderColor: border, paddingBottom: insets.bottom + 16 }]}>
+          <AppText variant="bodySemibold" color={text} style={{ marginBottom: 12 }}>
             {t('expenses.paymentMethod')}
           </AppText>
           {PAYMENT_METHODS.map((method) => {
@@ -822,9 +827,13 @@ export default function AddTransactionScreen() {
                   setPaymentMethod(method);
                   setPayOpen(false);
                 }}
-                style={[styles.payRow, selected && { borderColor: accent, backgroundColor: `${accent}14` }]}>
-                <Ionicons name={PAYMENT_ICONS[method]} size={18} color={selected ? accent : MUTED} />
-                <AppText variant="bodySemibold" color={selected ? '#FFFFFF' : MUTED} style={{ flex: 1 }}>
+                style={[
+                  styles.payRow,
+                  { borderColor: border },
+                  selected && { borderColor: accent, backgroundColor: `${accent}14` },
+                ]}>
+                <Ionicons name={PAYMENT_ICONS[method]} size={18} color={selected ? accent : muted} />
+                <AppText variant="bodySemibold" color={selected ? text : muted} style={{ flex: 1 }}>
                   {t(`paymentMethods.${method}`)}
                 </AppText>
                 {selected ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
@@ -899,7 +908,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: Radius.md,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   amountCard: {
     borderRadius: 18,
@@ -1035,20 +1043,15 @@ const styles = StyleSheet.create({
   catLabel: { fontSize: 9, width: '100%' },
   customInput: {
     borderWidth: 1,
-    borderColor: CARD_BORDER,
-    backgroundColor: '#0F172A',
     borderRadius: Radius.md,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    color: '#FFFFFF',
     marginBottom: 8,
     fontSize: 13,
   },
   metaStrip: {
-    backgroundColor: '#101614',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
     padding: 6,
     marginBottom: 10,
   },
@@ -1064,7 +1067,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 8,
     paddingVertical: 7,
   },
@@ -1092,7 +1094,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   photoPreview: {
     width: ATTACH_H,
@@ -1100,7 +1101,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: CARD_BORDER,
   },
   photoImg: { width: '100%', height: '100%' },
   photoRemove: {
@@ -1120,14 +1120,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 0,
     borderBottomWidth: 2,
-    borderBottomColor: 'rgba(255,255,255,0.14)',
-    backgroundColor: '#0F172A',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   noteInput: {
     flex: 1,
-    color: '#FFFFFF',
     fontSize: 13,
     lineHeight: 18,
     textAlignVertical: 'top',
@@ -1177,10 +1174,8 @@ const styles = StyleSheet.create({
   keypadTray: {
     flexGrow: 0,
     flexShrink: 0,
-    backgroundColor: '#020617',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
     padding: KEYPAD_INSET,
     marginBottom: 8,
     gap: KEY_GAP,
@@ -1193,12 +1188,8 @@ const styles = StyleSheet.create({
     flex: 1,
     height: KEY_H,
     borderRadius: 12,
-    backgroundColor: '#1A2220',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  keyPressed: {
-    backgroundColor: '#24302D',
   },
   keyText: {
     fontSize: 22,
@@ -1217,7 +1208,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#121816',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -1227,11 +1217,9 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     bottom: 24,
-    backgroundColor: '#121816',
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
   },
   payRow: {
     flexDirection: 'row',
@@ -1241,7 +1229,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
     marginBottom: 8,
   },
 });
