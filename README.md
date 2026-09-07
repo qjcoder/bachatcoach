@@ -38,7 +38,21 @@ npm run dev
 
 API runs at `http://localhost:5001` (port 5001 avoids macOS AirPlay conflict on 5000)
 
-### Mobile
+### Production API (Vercel)
+
+The API lives in `server/` and is deployed as project **bachatcoach-api**.
+
+- Production URL: `https://bachatcoach-api.vercel.app`
+- Health check: `GET /api/health`
+- **Root Directory must be `server`** in the Vercel project settings. Deploying from the monorepo root produces an empty build and `/api/*` returns `404 NOT_FOUND`.
+- Redeploy from the server folder when needed:
+
+```bash
+cd server
+vercel --prod
+```
+
+Set `EXPO_PUBLIC_API_URL=https://bachatcoach-api.vercel.app/api` in `mobile/.env` for device/release builds.
 
 ```bash
 cd mobile
