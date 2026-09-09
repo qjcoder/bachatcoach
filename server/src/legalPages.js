@@ -128,3 +128,32 @@ export const TERMS_HTML = page(
   <p><a href="mailto:qjcoder@gmail.com">qjcoder@gmail.com</a></p>
   `
 );
+
+/** Dedicated Play / App Store account-deletion instructions page. */
+export const ACCOUNT_DELETION_HTML = page(
+  'Delete Your Account',
+  `
+  <p>This page explains how to delete your BachatCoach account and what happens to your data.</p>
+
+  <h2>How to delete your account (in the app)</h2>
+  <ol>
+    <li>Open BachatCoach and sign in.</li>
+    <li>Go to <strong>Settings</strong>.</li>
+    <li>Scroll to <strong>Delete Account</strong> and confirm.</li>
+  </ol>
+
+  <h2>What happens next</h2>
+  <ul>
+    <li>Your account enters a <strong>7-day recovery window</strong>.</li>
+    <li>If you sign in again within 7 days, deletion is cancelled and your account stays active.</li>
+    <li>After the window ends, your account and associated server data (profile, transactions, loan records, goals) are permanently deleted.</li>
+    <li>Local PIN / biometric settings on the device are cleared when you delete from the app.</li>
+    <li>Optional files you saved to <strong>your own Google Drive</strong> are not automatically erased by us — you can remove those in Drive if you wish.</li>
+  </ul>
+
+  <h2>Need help?</h2>
+  <p>Email <a href="mailto:qjcoder@gmail.com">qjcoder@gmail.com</a> from the address on your account and ask us to schedule deletion. We will confirm by email.</p>
+
+  <p>Also see our <a href="/privacy">Privacy Policy</a>.</p>
+  `
+);

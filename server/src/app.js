@@ -7,7 +7,7 @@ import contactRoutes from './routes/contacts.js';
 import goalRoutes from './routes/goals.js';
 import dashboardRoutes from './routes/dashboard.js';
 import backupRoutes from './routes/backup.js';
-import { PRIVACY_HTML, TERMS_HTML } from './legalPages.js';
+import { PRIVACY_HTML, TERMS_HTML, ACCOUNT_DELETION_HTML } from './legalPages.js';
 
 const app = express();
 
@@ -26,6 +26,9 @@ function sendLegal(res, html) {
 
 app.get(['/privacy', '/api/privacy'], (_req, res) => sendLegal(res, PRIVACY_HTML));
 app.get(['/terms', '/api/terms'], (_req, res) => sendLegal(res, TERMS_HTML));
+app.get(['/delete-account', '/api/delete-account', '/account-deletion', '/api/account-deletion'], (_req, res) =>
+  sendLegal(res, ACCOUNT_DELETION_HTML)
+);
 
 app.use(async (_req, _res, next) => {
   try {
