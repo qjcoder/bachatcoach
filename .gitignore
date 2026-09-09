@@ -8,3 +8,15 @@ build/
 .DS_Store
 coverage/
 .metro-health-check*
+
+.vercel/
+
+# Local store export dumps (keep only curated playstore/assets)
+/screenshots/
+/Feature Graphic.png
+playstore/assets/screenshots/raw/
+playstore/assets/screenshots/raw-latest/
+playstore/assets/screenshots/archive-*/
+playstore/assets/*source*.png
+playstore/assets/App Icon*.png
+mobile/assets/images/_icon-preview-check.png

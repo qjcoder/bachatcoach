@@ -7,6 +7,7 @@ import contactRoutes from './routes/contacts.js';
 import goalRoutes from './routes/goals.js';
 import dashboardRoutes from './routes/dashboard.js';
 import backupRoutes from './routes/backup.js';
+import { PRIVACY_HTML, TERMS_HTML } from './legalPages.js';
 
 const app = express();
 
@@ -16,6 +17,15 @@ app.use(express.json({ limit: '4.5mb' }));
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', app: 'BachatCoach API' });
 });
+
+function sendLegal(res, html) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.status(200).send(html);
+}
+
+app.get(['/privacy', '/api/privacy'], (_req, res) => sendLegal(res, PRIVACY_HTML));
+app.get(['/terms', '/api/terms'], (_req, res) => sendLegal(res, TERMS_HTML));
 
 app.use(async (_req, _res, next) => {
   try {

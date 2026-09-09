@@ -1,0 +1,13 @@
+mobile/
+**/node_modules
+**/.git
+**/.expo
+**/ios
+**/android
+**/DerivedData
+**/.DS_Store
+agent-transcripts/
+playstore/*.png
+*.apk
+*.aab
+*.ipa

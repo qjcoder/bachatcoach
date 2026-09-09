@@ -15,7 +15,7 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { useColors } from '@/components/useColorScheme';
 import { downloadDriveFileDataUri, receiptIdFromRef } from '@/lib/googleDrive';
-import { ensureGoogleAccessToken } from '@/lib/googleAuth';
+import { ensureGoogleDriveToken, useGoogleDriveConnect } from '@/lib/googleAuth';
 import { Brand, Radius } from '@/constants/theme';
 
 type ReceiptViewerProps = {
@@ -27,6 +27,7 @@ export function ReceiptViewer({ receiptRef, onClose }: ReceiptViewerProps) {
   const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { connectDrive } = useGoogleDriveConnect();
   const [uri, setUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,7 +52,9 @@ export function ReceiptViewer({ receiptRef, onClose }: ReceiptViewerProps) {
         const fileId = receiptIdFromRef(receiptRef);
         if (!fileId) throw new Error('missing');
 
-        const token = await ensureGoogleAccessToken();
+        // Prefer existing Drive grant; Retry button can prompt via connectDrive.
+        let token = await ensureGoogleDriveToken();
+        if (!token) token = await connectDrive();
         if (!token) {
           throw new Error('needGoogle');
         }
@@ -74,7 +77,7 @@ export function ReceiptViewer({ receiptRef, onClose }: ReceiptViewerProps) {
     return () => {
       cancelled = true;
     };
-  }, [receiptRef, reloadKey]);
+  }, [receiptRef, reloadKey, connectDrive]);
 
   return (
     <Modal

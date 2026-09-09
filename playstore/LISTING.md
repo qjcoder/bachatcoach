@@ -126,8 +126,10 @@ personal finance, expense tracker, savings, budget, khata, udhaar, loan tracker,
 ---
 
 ## Privacy policy URL
-Host `playstore/PRIVACY_POLICY.md` on a public URL before submission.  
-Example: `https://yourdomain.com/bachatcoach/privacy`
+https://bachatcoach-api.vercel.app/privacy
+
+## Terms of Service URL
+https://bachatcoach-api.vercel.app/terms
 
 ---
 
@@ -138,28 +140,33 @@ Example: `https://yourdomain.com/bachatcoach/privacy`
 | Email | Yes | No | Account authentication |
 | Name | Yes | No | Profile display |
 | Financial info (transactions) | Yes | No | App functionality |
+| Photos (receipts, optional) | Yes | No (may sync to user's Google Drive) | Receipts / backup |
 | Device ID | No | No | — |
 
 **Encryption:** Data encrypted in transit (HTTPS)  
-**Deletion:** Users can request account deletion via support email
+**Deletion:** In-app Settings → Delete Account (7-day recovery window), or email support
 
 ---
 
 ## Support email
-`support@bachatcoach.app` (replace with your real email)
+`qjcoder@gmail.com`
 
-## Website
-`https://bachatcoach.app` (optional, recommended)
+## Website / legal
+- Privacy: https://bachatcoach-api.vercel.app/privacy
+- Terms: https://bachatcoach-api.vercel.app/terms
 
 ---
 
 ## Release checklist
 
-- [ ] Generate signed AAB (`eas build --platform android`)
-- [ ] Privacy policy hosted at public URL
+- [ ] Rotate Google web client secret (was previously in mobile `.env`); set `GOOGLE_CLIENT_SECRET` on Vercel only
+- [ ] `eas build --platform android --profile production` (signed AAB, not debug keystore)
+- [ ] `eas build --platform ios --profile production`
+- [ ] Privacy + Terms URLs live (see above)
 - [ ] App icon 512×512 uploaded
 - [ ] Feature graphic 1024×500 uploaded
 - [ ] Screenshots (min 2, recommend 8)
 - [ ] Content rating questionnaire completed
-- [ ] Data safety form completed
+- [ ] Data safety / App Privacy forms completed
 - [ ] Target countries: Pakistan (+ optional global)
+- [ ] Google OAuth: production SHA-1 for Play upload key; publish consent screen

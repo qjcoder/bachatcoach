@@ -38,6 +38,7 @@ import {
 } from '@/lib/lock';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { PinBoxes } from '@/components/PinBoxes';
 import { PatternLock } from '@/components/PatternLock';
@@ -647,13 +648,13 @@ export default function SettingsScreen() {
         <SettingsMenuRow
           icon="shield-checkmark-outline"
           label={t('settings.privacyPolicy')}
-          onPress={() => Linking.openURL('https://bachatcoach.com/privacy')}
+          onPress={() => Linking.openURL('https://bachatcoach-api.vercel.app/privacy')}
           {...rowTheme}
         />
         <SettingsMenuRow
           icon="document-text-outline"
           label={t('settings.termsOfService')}
-          onPress={() => Linking.openURL('https://bachatcoach.com/terms')}
+          onPress={() => Linking.openURL('https://bachatcoach-api.vercel.app/terms')}
           {...rowTheme}
         />
         <SettingsMenuRow
@@ -681,7 +682,7 @@ export default function SettingsScreen() {
         <SettingsMenuRow
           icon="information-circle-outline"
           label={t('settings.appVersion')}
-          subtitle={t('settings.appVersionValue')}
+          subtitle={`BachatCoach v${Constants.expoConfig?.version ?? '1.1.0'}`}
           last
           {...rowTheme}
         />

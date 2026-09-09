@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View, ActivityIndicator, Text } from 'react-native';
+import { Pressable, StyleSheet, View, ActivityIndicator, Text, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/AppText';
@@ -9,7 +9,8 @@ import {
   isGoogleAuthConfigured,
   persistGoogleTokens,
   exchangeCodeForTokens,
-  useGoogleAuthRequestWithDrive,
+  useGoogleAuthRequest,
+  signInWithGoogleNative,
 } from '@/lib/googleAuth';
 import { useAuth } from '@/context/AuthContext';
 
@@ -63,8 +64,10 @@ export function GoogleSignInButton({ onSuccess }: Props) {
   const { loginWithGoogle } = useAuth();
   const { showAlert } = useDialog();
   const [loading, setLoading] = useState(false);
-  const [request, , promptAsync] = useGoogleAuthRequestWithDrive();
+  // iOS keeps AuthSession; Android uses native Play Services Sign-In.
+  const [request, , promptAsync] = useGoogleAuthRequest();
   const configured = isGoogleAuthConfigured();
+  const useNativeAndroid = Platform.OS === 'android';
 
   const handlePress = async () => {
     if (!configured) {
@@ -77,6 +80,14 @@ export function GoogleSignInButton({ onSuccess }: Props) {
     }
     setLoading(true);
     try {
+      if (useNativeAndroid) {
+        const { idToken, accessToken } = await signInWithGoogleNative();
+        await persistGoogleTokens(accessToken, null, { drive: false });
+        await loginWithGoogle(idToken);
+        onSuccess?.();
+        return;
+      }
+
       const result = await promptAsync();
       if (result.type !== 'success') {
         if (result.type === 'error') {
@@ -98,8 +109,6 @@ export function GoogleSignInButton({ onSuccess }: Props) {
       let refreshToken: string | undefined =
         result.authentication?.refreshToken || undefined;
 
-      // Always exchange the auth code when present so we get Drive access + refresh tokens.
-      // Skipping exchange when id_token is already present left many sessions without Drive.
       const authCode = result.params?.code as string | undefined;
       if (authCode) {
         const tokens = await exchangeCodeForTokens(authCode, request?.codeVerifier);
@@ -113,19 +122,12 @@ export function GoogleSignInButton({ onSuccess }: Props) {
         return;
       }
 
-      if (!accessToken) {
-        showAlert({
-          title: t('common.error'),
-          message: t('expenses.receiptNeedGoogle'),
-          tone: 'warning',
-        });
-        return;
-      }
-
-      await persistGoogleTokens(accessToken, refreshToken);
+      await persistGoogleTokens(accessToken, refreshToken, { drive: false });
       await loginWithGoogle(idToken);
       onSuccess?.();
     } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'SIGN_IN_CANCELLED' || code === 'ERR_CANCELED') return;
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         (err instanceof Error ? err.message : t('auth.googleFailed'));
@@ -135,12 +137,14 @@ export function GoogleSignInButton({ onSuccess }: Props) {
     }
   };
 
+  const busy = loading || (!useNativeAndroid && !request);
+
   return (
     <View style={styles.wrap}>
       <Pressable
         onPress={handlePress}
-        disabled={loading || !request}
-        style={({ pressed }) => [styles.pressable, pressed && styles.pressed, (loading || !request) && styles.disabled]}>
+        disabled={busy}
+        style={({ pressed }) => [styles.pressable, pressed && styles.pressed, busy && styles.disabled]}>
         <LinearGradient
           colors={['#4285F4', '#34A853', '#FBBC05', '#EA4335']}
           start={{ x: 0, y: 0 }}

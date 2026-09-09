@@ -12,7 +12,7 @@ import { SettingsMenuRow } from '@/components/SettingsMenuRow';
 import { Brand, Radius } from '@/constants/theme';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
-import { ensureGoogleAccessToken, isGoogleAuthConfigured } from '@/lib/googleAuth';
+import { ensureGoogleDriveToken, isGoogleAuthConfigured, useGoogleDriveConnect } from '@/lib/googleAuth';
 import {
   downloadBackupFromDrive,
   isBackupDue,
@@ -41,13 +41,15 @@ export function DriveBackupSection({ rowTheme }: Props) {
   const [busy, setBusy] = useState(false);
   const [autoRan, setAutoRan] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { connectDrive } = useGoogleDriveConnect();
 
   const frequency = (user?.backupFrequency || 'off') as BackupFrequency;
   const enabled = Boolean(user?.backupEnabled) && frequency !== 'off';
 
   const runBackup = useCallback(
     async (silent = false) => {
-      const token = await ensureGoogleAccessToken();
+      // Auto-backup never pops OAuth; manual backup asks for Drive once.
+      const token = silent ? await ensureGoogleDriveToken() : await connectDrive();
       if (!token) {
         if (!silent) {
           showAlert({ title: t('backup.title'), message: t('backup.needGoogle'), tone: 'warning' });
@@ -81,7 +83,7 @@ export function DriveBackupSection({ rowTheme }: Props) {
         setBusy(false);
       }
     },
-    [frequency, refreshUser, showAlert, t]
+    [connectDrive, frequency, refreshUser, showAlert, t]
   );
 
   const runRestore = () => {
@@ -95,6 +97,11 @@ export function DriveBackupSection({ rowTheme }: Props) {
       onConfirm: async () => {
         setBusy(true);
         try {
+          const token = await connectDrive();
+          if (!token) {
+            showAlert({ title: t('backup.title'), message: t('backup.needGoogle'), tone: 'warning' });
+            return;
+          }
           const payload = await downloadBackupFromDrive();
           await api.post('/backup/restore', payload);
           await refreshUser();
@@ -125,9 +132,12 @@ export function DriveBackupSection({ rowTheme }: Props) {
   };
 
   const toggleEnabled = async (value: boolean) => {
-    if (value && !(await ensureGoogleAccessToken())) {
-      showAlert({ title: t('backup.title'), message: t('backup.needGoogle'), tone: 'warning' });
-      return;
+    if (value) {
+      const token = await connectDrive();
+      if (!token) {
+        showAlert({ title: t('backup.title'), message: t('backup.needGoogle'), tone: 'warning' });
+        return;
+      }
     }
     setBusy(true);
     try {

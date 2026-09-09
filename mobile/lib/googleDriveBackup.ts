@@ -1,5 +1,5 @@
 import { APP_FOLDER_NAME, DRIVE_UPLOAD, driveFetch, ensureAppFolderId, findFolderId } from '@/lib/googleDrive';
-import { ensureGoogleAccessToken } from '@/lib/googleAuth';
+import { ensureGoogleDriveToken } from '@/lib/googleAuth';
 
 const BACKUP_FILENAME = 'BachatCoach-backup.json';
 
@@ -32,8 +32,8 @@ export async function uploadBackupToDrive(payload: unknown): Promise<{ fileId: s
     `${body}\r\n` +
     `--${boundary}--`;
 
-  const token = await ensureGoogleAccessToken();
-  if (!token) throw new Error('Google Drive is not connected. Sign in with Google again.');
+  const token = await ensureGoogleDriveToken();
+  if (!token) throw new Error('Google Drive is not connected. Connect Drive in Settings first.');
 
   const url = existingId
     ? `${DRIVE_UPLOAD}/files/${existingId}?uploadType=multipart`

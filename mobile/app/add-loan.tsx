@@ -7,6 +7,10 @@ import {
   TextInput,
   Modal,
   Dimensions,
+  Keyboard,
+  ScrollView,
+  InteractionManager,
+  type KeyboardEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -89,10 +93,33 @@ export default function AddLoanScreen() {
   const [people, setPeople] = useState<Contact[]>([]);
   const [personQuery, setPersonQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(editingId || null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  useEffect(() => {
+    const onShow = (e: KeyboardEvent) => setKeyboardHeight(e.endCoordinates.height);
+    const onHide = () => setKeyboardHeight(0);
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, onShow);
+    const hideSub = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const keyboardOpen = keyboardHeight > 0;
+
+  const goBackAfterSave = useCallback(() => {
+    InteractionManager.runAfterInteractions(() => {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/loans');
+    });
+  }, [router]);
 
   useEffect(() => {
     api
@@ -216,6 +243,7 @@ export default function AddLoanScreen() {
       return;
     }
 
+    Keyboard.dismiss();
     setLoading(true);
     try {
       const dueIso = dueDate ? dueDate.toISOString() : null;
@@ -245,7 +273,7 @@ export default function AddLoanScreen() {
           dueDate: dueIso || undefined,
         });
       }
-      router.back();
+      goBackAfterSave();
     } catch (err: unknown) {
       const data = (err as { response?: { data?: { code?: string; direction?: string } } })?.response
         ?.data;
@@ -261,13 +289,12 @@ export default function AddLoanScreen() {
       } else {
         showAlert({ title: t('loans.title'), message: t('loans.updateFailed'), tone: 'error' });
       }
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: bg, paddingBottom: Math.max(insets.bottom, 6) }]}>
+    <View style={[styles.root, { backgroundColor: bg }]}>
       <View style={{ paddingTop: Math.max(insets.top, 6) }}>
         <View style={[styles.topBar, { direction: 'ltr' }]}>
           <Pressable
@@ -301,6 +328,13 @@ export default function AddLoanScreen() {
       </View>
 
       <View style={styles.content}>
+        <ScrollView
+          style={styles.formScroll}
+          contentContainerStyle={styles.formScrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+          bounces={false}>
         <LinearGradient
           colors={
             isLent
@@ -477,39 +511,51 @@ export default function AddLoanScreen() {
           </View>
         </View>
 
-        <View style={styles.flexSpacer} />
+        {!keyboardOpen ? <View style={styles.flexSpacer} /> : null}
+        </ScrollView>
 
-        <View style={styles.keypadTray}>
-          {(
-            [
-              ['1', '2', '3'],
-              ['4', '5', '6'],
-              ['7', '8', '9'],
-              ['.', '0', 'back'],
-            ] as const
-          ).map((row) => (
-            <View key={row.join('-')} style={styles.keyRow}>
-              {row.map((key) => (
-                <Pressable
-                  key={key}
-                  onPress={() => onKey(key)}
-                  style={({ pressed }) => [
-                    styles.key,
-                    { backgroundColor: field, borderColor: border },
-                    pressed && styles.keyPressed,
-                  ]}>
-                  {key === 'back' ? (
-                    <Ionicons name="backspace-outline" size={18} color={soft} />
-                  ) : (
-                    <AppText variant="h3" color={text} style={styles.keyText}>
-                      {key}
-                    </AppText>
-                  )}
-                </Pressable>
-              ))}
-            </View>
-          ))}
-        </View>
+        <View
+          style={[
+            styles.composer,
+            {
+              backgroundColor: bg,
+              paddingBottom: keyboardOpen ? 10 : Math.max(insets.bottom, 6),
+              marginBottom: keyboardOpen ? keyboardHeight : 0,
+            },
+          ]}>
+        {!keyboardOpen ? (
+          <View style={styles.keypadTray}>
+            {(
+              [
+                ['1', '2', '3'],
+                ['4', '5', '6'],
+                ['7', '8', '9'],
+                ['.', '0', 'back'],
+              ] as const
+            ).map((row) => (
+              <View key={row.join('-')} style={styles.keyRow}>
+                {row.map((key) => (
+                  <Pressable
+                    key={key}
+                    onPress={() => onKey(key)}
+                    style={({ pressed }) => [
+                      styles.key,
+                      { backgroundColor: field, borderColor: border },
+                      pressed && styles.keyPressed,
+                    ]}>
+                    {key === 'back' ? (
+                      <Ionicons name="backspace-outline" size={18} color={soft} />
+                    ) : (
+                      <AppText variant="h3" color={text} style={styles.keyText}>
+                        {key}
+                      </AppText>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <Pressable onPress={save} disabled={loading} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
           <LinearGradient
@@ -525,6 +571,7 @@ export default function AddLoanScreen() {
             </RTLRow>
           </LinearGradient>
         </Pressable>
+        </View>
       </View>
 
       {showDuePicker && Platform.OS === 'android' ? (
@@ -642,6 +689,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PAD,
     paddingTop: 4,
     gap: COMPACT ? 8 : 10,
+  },
+  formScroll: {
+    flex: 1,
+  },
+  formScrollContent: {
+    flexGrow: 1,
+    gap: COMPACT ? 8 : 10,
+    paddingBottom: 4,
+  },
+  composer: {
+    gap: COMPACT ? 8 : 10,
+    paddingTop: 4,
   },
   amountCard: {
     borderRadius: 16,

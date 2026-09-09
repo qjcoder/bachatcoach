@@ -8,6 +8,10 @@ import {
   Dimensions,
   Image,
   Modal,
+  Keyboard,
+  ScrollView,
+  InteractionManager,
+  type KeyboardEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -25,7 +29,7 @@ import { Brand, Radius, TxnKind, txnKindGradientDeep } from '@/constants/theme';
 import { isOtherCategory } from '@/lib/category';
 import { useAuth } from '@/context/AuthContext';
 import { getCurrency } from '@/constants/currencies';
-import { ensureGoogleAccessToken } from '@/lib/googleAuth';
+import { useGoogleDriveConnect } from '@/lib/googleAuth';
 import { uploadReceiptToDrive } from '@/lib/googleDrive';
 import { formatAmount, formatTransactionTime } from '@/lib/format';
 import { localeForLanguage, scriptLanguage } from '@/lib/language';
@@ -147,6 +151,7 @@ export default function AddTransactionScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { connectDrive } = useGoogleDriveConnect();
   const { bg, card, border, text, muted, soft, well, field, onBrand, isDark } = usePageChrome();
   const currency = getCurrency(user?.currency);
 
@@ -173,6 +178,7 @@ export default function AddTransactionScreen() {
       : 'cash'
   );
   const [note, setNote] = useState(firstParam(params.note) || '');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [tags] = useState<string[]>(() => parseTagsParam(firstParam(params.tags)));
   const [monthIncome, setMonthIncome] = useState(0);
   const [txnDate, setTxnDate] = useState(() => {
@@ -220,6 +226,30 @@ export default function AddTransactionScreen() {
       headerShown: false,
     });
   }, [navigation]);
+
+  useEffect(() => {
+    const onShow = (e: KeyboardEvent) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    };
+    const onHide = () => setKeyboardHeight(0);
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, onShow);
+    const hideSub = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const keyboardOpen = keyboardHeight > 0;
+
+  const goBackAfterSave = useCallback(() => {
+    InteractionManager.runAfterInteractions(() => {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/expenses');
+    });
+  }, [router]);
 
   const titleKey = isEditing
     ? isSavings
@@ -377,17 +407,19 @@ export default function AddTransactionScreen() {
       });
       return;
     }
+    Keyboard.dismiss();
     setLoading(true);
     try {
       let receiptImage: string | undefined;
       if (receipt?.uri) {
-        const token = await ensureGoogleAccessToken();
+        const token = await connectDrive();
         if (!token) {
           showAlert({
             title: t('expenses.receipt'),
             message: t('expenses.receiptNeedGoogle'),
             tone: 'warning',
           });
+          setLoading(false);
           return;
         }
         receiptImage = await uploadReceiptToDrive(receipt.uri, type);
@@ -411,7 +443,7 @@ export default function AddTransactionScreen() {
           receiptImage: receiptImage || '',
         });
       }
-      router.back();
+      goBackAfterSave();
     } catch (err) {
       const message = err instanceof Error ? err.message : t('expenses.saveFailed');
       showAlert({
@@ -422,7 +454,6 @@ export default function AddTransactionScreen() {
             : t('expenses.saveFailed'),
         tone: 'error',
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -436,7 +467,7 @@ export default function AddTransactionScreen() {
         : t('expenses.saveExpense');
 
   return (
-    <View style={[styles.root, { backgroundColor: bg, paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[styles.root, { backgroundColor: bg }]}>
       {/* In-screen header — title absolute-centered on screen */}
       <View style={{ paddingTop: Math.max(insets.top, 8) }}>
         <View style={styles.topBar}>
@@ -480,7 +511,15 @@ export default function AddTransactionScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* Amount */}
+        <ScrollView
+          style={styles.formScroll}
+          contentContainerStyle={styles.formScrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+          bounces={false}>
+        {/* Amount — compact strip while typing a note */}
+        {!keyboardOpen ? (
         <LinearGradient
           colors={
             isSavings
@@ -541,9 +580,29 @@ export default function AddTransactionScreen() {
             </AppText>
           ) : null}
         </LinearGradient>
+        ) : (
+          <RTLRow
+            style={[styles.amountMini, { backgroundColor: card, borderColor: `${accent}40` }]}
+            gap={8}>
+            <AppText variant="captionBold" color={accent}>
+              {currency.symbol} {displayAmount}
+            </AppText>
+            {!isSavings ? (
+              <AppText variant="caption" color={muted} numberOfLines={1} style={{ flex: 1 }}>
+                {t(`categoriesShort.${category}`, { defaultValue: t(`categories.${category}`) })}
+                {' · '}
+                {dateLabel}
+              </AppText>
+            ) : (
+              <AppText variant="caption" color={muted} style={{ flex: 1 }}>
+                {t('expenses.addSavings')}
+              </AppText>
+            )}
+          </RTLRow>
+        )}
 
         {/* Categories — filled tiles */}
-        {!isSavings ? (
+        {!isSavings && !keyboardOpen ? (
           <View style={styles.catGrid}>
             {categories.map((cat) => {
               const selected = category === cat;
@@ -552,6 +611,7 @@ export default function AddTransactionScreen() {
                 <Pressable
                   key={cat}
                   onPress={() => {
+                    Keyboard.dismiss();
                     setCategory(cat);
                     if (!isOtherCategory(cat)) setCustomCategory('');
                   }}
@@ -587,7 +647,7 @@ export default function AddTransactionScreen() {
           </View>
         ) : null}
 
-        {!isSavings && isOtherCategory(category) ? (
+        {!isSavings && isOtherCategory(category) && !keyboardOpen ? (
           <TextInput
             style={[styles.customInput, { borderColor: border, backgroundColor: field, color: text }]}
             value={customCategory}
@@ -598,6 +658,7 @@ export default function AddTransactionScreen() {
         ) : null}
 
         {/* Date / Time / Payment — outlined pills on strip */}
+        {!keyboardOpen ? (
         <View style={[styles.metaStrip, { backgroundColor: card, borderColor: border }]}>
           <RTLRow style={styles.metaRow} gap={6}>
             <Pressable onPress={() => setPickerMode('date')} style={[styles.metaChip, { borderColor: border }]}>
@@ -643,55 +704,10 @@ export default function AddTransactionScreen() {
             ) : null}
           </RTLRow>
         </View>
-
-        {/* Photo + Note — dashed attach + inset field */}
-        {!isSavings ? (
-          <RTLRow style={styles.attachRow} gap={8}>
-            {receipt?.uri ? (
-              <View style={[styles.photoPreview, { borderColor: border }]}>
-                <Image source={{ uri: receipt.uri }} style={styles.photoImg} />
-                <Pressable onPress={() => setReceipt(null)} style={styles.photoRemove}>
-                  <Ionicons name="close" size={11} color={onBrand} />
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                onPress={pickGallery}
-                onLongPress={scanReceipt}
-                style={[styles.addPhoto, { borderColor: `${accent}55`, backgroundColor: well }]}>
-                <Ionicons name="camera-outline" size={20} color={accent} />
-              </Pressable>
-            )}
-            <View style={[styles.noteBox, { borderBottomColor: border, backgroundColor: field }]}>
-              <TextInput
-                style={[styles.noteInput, { color: text }]}
-                value={note}
-                onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
-                placeholder={t('expenses.noteShort')}
-                placeholderTextColor={muted}
-                multiline
-                maxLength={NOTE_MAX}
-              />
-            </View>
-          </RTLRow>
-        ) : (
-          <View style={[styles.noteBox, styles.savingsNote, { borderBottomColor: border, backgroundColor: field }]}>
-            <Ionicons name="bookmark-outline" size={16} color={accent} style={styles.savingsNoteIcon} />
-            <TextInput
-              style={[styles.noteInput, { color: text }]}
-              value={note}
-              onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
-              placeholder={t('expenses.savingsNotePlaceholder')}
-              placeholderTextColor={muted}
-              maxLength={NOTE_MAX}
-              returnKeyType="done"
-              blurOnSubmit
-            />
-          </View>
-        )}
+        ) : null}
 
         {/* Daily savings quote fills leftover space */}
-        {isSavings && savingsQuote ? (
+        {isSavings && savingsQuote && !keyboardOpen ? (
           <View style={styles.quoteArea}>
             <LinearGradient
               colors={['#3F2E14', '#78350F', '#451A03']}
@@ -719,60 +735,122 @@ export default function AddTransactionScreen() {
               ) : null}
             </LinearGradient>
           </View>
+        ) : !keyboardOpen ? (
+          <View style={styles.flexSpacer} />
         ) : (
           <View style={styles.flexSpacer} />
         )}
+        </ScrollView>
 
-        {/* Keypad — fixed size (same on all types) */}
-        <View style={[styles.keypadTray, { backgroundColor: card, borderColor: border }]}>
-          {(
-            [
-              ['1', '2', '3'],
-              ['4', '5', '6'],
-              ['7', '8', '9'],
-              ['.', '0', 'back'],
-            ] as const
-          ).map((row) => (
-            <View key={row.join('-')} style={styles.keyRow}>
-              {row.map((key) => (
+        {/* Sticky composer: note + keypad + save — lifts with real keyboard height */}
+        <View
+          style={[
+            styles.composer,
+            {
+              backgroundColor: bg,
+              paddingBottom: keyboardOpen ? 10 : Math.max(insets.bottom, 8),
+              marginBottom: keyboardOpen ? keyboardHeight : 0,
+            },
+          ]}>
+          {!isSavings ? (
+            <RTLRow style={styles.attachRow} gap={8}>
+              {receipt?.uri ? (
+                <View style={[styles.photoPreview, { borderColor: border }]}>
+                  <Image source={{ uri: receipt.uri }} style={styles.photoImg} />
+                  <Pressable onPress={() => setReceipt(null)} style={styles.photoRemove}>
+                    <Ionicons name="close" size={11} color={onBrand} />
+                  </Pressable>
+                </View>
+              ) : (
                 <Pressable
-                  key={key}
-                  onPress={() => onKey(key)}
-                  style={({ pressed }) => [
-                    styles.key,
-                    { backgroundColor: field },
-                    pressed && { backgroundColor: well },
-                  ]}>
-                  {key === 'back' ? (
-                    <Ionicons name="backspace-outline" size={20} color={soft} />
-                  ) : (
-                    <AppText variant="h3" color={text} style={styles.keyText}>
-                      {key}
-                    </AppText>
-                  )}
+                  onPress={pickGallery}
+                  onLongPress={scanReceipt}
+                  style={[styles.addPhoto, { borderColor: `${accent}55`, backgroundColor: well }]}>
+                  <Ionicons name="camera-outline" size={20} color={accent} />
                 </Pressable>
+              )}
+              <View style={[styles.noteBox, { borderBottomColor: border, backgroundColor: field }]}>
+                <TextInput
+                  style={[styles.noteInput, { color: text }]}
+                  value={note}
+                  onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
+                  placeholder={t('expenses.noteShort')}
+                  placeholderTextColor={muted}
+                  multiline
+                  maxLength={NOTE_MAX}
+                  blurOnSubmit
+                  returnKeyType="done"
+                />
+              </View>
+            </RTLRow>
+          ) : (
+            <View style={[styles.noteBox, styles.savingsNote, { borderBottomColor: border, backgroundColor: field }]}>
+              <Ionicons name="bookmark-outline" size={16} color={accent} style={styles.savingsNoteIcon} />
+              <TextInput
+                style={[styles.noteInput, { color: text }]}
+                value={note}
+                onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
+                placeholder={t('expenses.savingsNotePlaceholder')}
+                placeholderTextColor={muted}
+                maxLength={NOTE_MAX}
+                returnKeyType="done"
+                blurOnSubmit
+              />
+            </View>
+          )}
+
+          {!keyboardOpen ? (
+            <View style={[styles.keypadTray, { backgroundColor: card, borderColor: border }]}>
+              {(
+                [
+                  ['1', '2', '3'],
+                  ['4', '5', '6'],
+                  ['7', '8', '9'],
+                  ['.', '0', 'back'],
+                ] as const
+              ).map((row) => (
+                <View key={row.join('-')} style={styles.keyRow}>
+                  {row.map((key) => (
+                    <Pressable
+                      key={key}
+                      onPress={() => onKey(key)}
+                      style={({ pressed }) => [
+                        styles.key,
+                        { backgroundColor: field },
+                        pressed && { backgroundColor: well },
+                      ]}>
+                      {key === 'back' ? (
+                        <Ionicons name="backspace-outline" size={20} color={soft} />
+                      ) : (
+                        <AppText variant="h3" color={text} style={styles.keyText}>
+                          {key}
+                        </AppText>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
               ))}
             </View>
-          ))}
-        </View>
+          ) : null}
 
-        <Pressable
-          onPress={save}
-          disabled={loading || loadingEntry}
-          style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
-          <LinearGradient
-            colors={[...gradient]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.saveBtn, (loading || loadingEntry) && { opacity: 0.65 }]}>
-            <RTLRow gap={8} style={{ justifyContent: 'center' }}>
-              <Ionicons name="checkmark-circle" size={18} color={onBrand} />
-              <AppText variant="button" color={onBrand}>
-                {saveLabel}
-              </AppText>
-            </RTLRow>
-          </LinearGradient>
-        </Pressable>
+          <Pressable
+            onPress={save}
+            disabled={loading || loadingEntry}
+            style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
+            <LinearGradient
+              colors={[...gradient]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.saveBtn, (loading || loadingEntry) && { opacity: 0.65 }]}>
+              <RTLRow gap={8} style={{ justifyContent: 'center' }}>
+                <Ionicons name="checkmark-circle" size={18} color={onBrand} />
+                <AppText variant="button" color={onBrand}>
+                  {saveLabel}
+                </AppText>
+              </RTLRow>
+            </LinearGradient>
+          </Pressable>
+        </View>
       </View>
 
       {/* Date / time picker */}
@@ -881,6 +959,25 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: H_PAD,
     paddingTop: 4,
+  },
+  formScroll: {
+    flex: 1,
+  },
+  formScrollContent: {
+    flexGrow: 1,
+    gap: COMPACT ? 8 : 10,
+    paddingBottom: 4,
+  },
+  composer: {
+    gap: COMPACT ? 8 : 10,
+    paddingTop: 4,
+  },
+  amountMini: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   headerTitleRow: {
     flexDirection: 'row',

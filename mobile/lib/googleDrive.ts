@@ -1,5 +1,5 @@
 import {
-  ensureGoogleAccessToken,
+  ensureGoogleDriveToken,
   refreshGoogleAccessToken,
 } from '@/lib/googleAuth';
 
@@ -24,8 +24,8 @@ export function hasReceipt(ref?: string | null) {
 }
 
 async function authorizedFetch(url: string, init: RequestInit = {}, retried = false): Promise<Response> {
-  let token = await ensureGoogleAccessToken();
-  if (!token) throw new Error('Google Drive is not connected. Sign in with Google again.');
+  let token = await ensureGoogleDriveToken();
+  if (!token) throw new Error('Google Drive is not connected. Connect Drive in Settings or when saving a receipt.');
 
   const res = await fetch(url, {
     ...init,
@@ -37,7 +37,7 @@ async function authorizedFetch(url: string, init: RequestInit = {}, retried = fa
 
   if (res.status === 401 && !retried) {
     const next = await refreshGoogleAccessToken();
-    if (!next) throw new Error('Google Drive is not connected. Sign in with Google again.');
+    if (!next) throw new Error('Google Drive is not connected. Connect Drive in Settings or when saving a receipt.');
     return authorizedFetch(url, init, true);
   }
 
