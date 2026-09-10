@@ -39,7 +39,10 @@ const TONE_COLOR: Record<AppDialogTone, string> = {
   warning: Brand.secondary,
 };
 
-/** Branded center dialog — root overlay with blurred backdrop. */
+/**
+ * Branded center dialog in the root overlay host (same window as the navigator).
+ * Avoid RN Modal here — nesting it above Expo `presentation: 'modal'` freezes touches.
+ */
 export function AppDialog({
   visible,
   title,
@@ -100,101 +103,98 @@ export function AppDialog({
           <Ionicons name="close" size={18} color={colors.muted} />
         </Pressable>
 
-          <View style={styles.iconBlock}>
-            {isSuccess ? (
-              <>
-                <View style={styles.sparkTop}>
-                  <View style={[styles.spark, styles.sparkA]} />
-                  <View style={[styles.spark, styles.sparkB]} />
-                  <View style={[styles.spark, styles.sparkC]} />
-                </View>
-                <View style={styles.successIcon}>
-                  <Ionicons name="checkmark" size={32} color="#fff" />
-                </View>
-                <View style={styles.sparkBottom}>
-                  <View style={[styles.spark, styles.sparkD]} />
-                  <View style={[styles.spark, styles.sparkE]} />
-                </View>
-              </>
-            ) : (
-              <View style={[styles.iconWrap, { backgroundColor: `${color}18` }]}>
-                <Ionicons name={TONE_ICON[tone]} size={28} color={color} />
+        <View style={styles.iconBlock}>
+          {isSuccess ? (
+            <>
+              <View style={styles.sparkTop}>
+                <View style={[styles.spark, styles.sparkA]} />
+                <View style={[styles.spark, styles.sparkB]} />
+                <View style={[styles.spark, styles.sparkC]} />
               </View>
-            )}
-          </View>
-
-          <AppText variant="h2" color={colors.text} style={styles.title}>
-            {title}
-          </AppText>
-          {message ? (
-            <AppText variant="bodySmall" color={colors.muted} style={styles.message}>
-              {message}
-            </AppText>
+              <View style={styles.successIcon}>
+                <Ionicons name="checkmark" size={32} color="#fff" />
+              </View>
+              <View style={styles.sparkBottom}>
+                <View style={[styles.spark, styles.sparkD]} />
+                <View style={[styles.spark, styles.sparkE]} />
+              </View>
+            </>
           ) : (
-            <View style={styles.messageSpacer} />
-          )}
-
-          {hasCancel ? (
-            <View style={styles.actionsRow}>
-              {safePrimary ? (
-                <>
-                  <Button
-                    title={confirmLabel}
-                    onPress={handleConfirm}
-                    variant="outline"
-                    compact
-                    style={{
-                      ...styles.actionHalf,
-                      ...(destructive ? { borderColor: Brand.danger } : null),
-                    }}
-                  />
-                  <Button
-                    title={cancelLabel!}
-                    onPress={onClose}
-                    compact
-                    style={styles.actionHalf}
-                  />
-                </>
-              ) : (
-                <>
-                  <Button
-                    title={cancelLabel!}
-                    onPress={onClose}
-                    variant="outline"
-                    compact
-                    style={styles.actionHalf}
-                  />
-                  <Button
-                    title={confirmLabel}
-                    onPress={handleConfirm}
-                    compact
-                    style={destructive ? styles.actionHalfDestructive : styles.actionHalf}
-                  />
-                </>
-              )}
+            <View style={[styles.iconWrap, { backgroundColor: `${color}18` }]}>
+              <Ionicons name={TONE_ICON[tone]} size={28} color={color} />
             </View>
-          ) : isSuccess ? (
-            <Pressable onPress={handleConfirm} style={({ pressed }) => [styles.donePress, pressed && styles.pressed]}>
-              <LinearGradient
-                colors={[TxnKindSoft.income, Brand.primary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.doneBtn}>
-                <AppText variant="button" color="#fff">
-                  {confirmLabel}
-                </AppText>
-              </LinearGradient>
-            </Pressable>
-          ) : (
-            <Button
-              title={confirmLabel}
-              onPress={handleConfirm}
-              compact
-              style={destructive ? styles.buttonDestructive : styles.button}
-            />
           )}
         </View>
+
+        <AppText variant="h2" color={colors.text} style={styles.title}>
+          {title}
+        </AppText>
+        {message ? (
+          <AppText variant="bodySmall" color={colors.muted} style={styles.message}>
+            {message}
+          </AppText>
+        ) : (
+          <View style={styles.messageSpacer} />
+        )}
+
+        {hasCancel ? (
+          <View style={styles.actionsRow}>
+            {safePrimary ? (
+              <>
+                <Button
+                  title={confirmLabel}
+                  onPress={handleConfirm}
+                  variant="outline"
+                  compact
+                  style={{
+                    ...styles.actionHalf,
+                    ...(destructive ? { borderColor: Brand.danger } : null),
+                  }}
+                />
+                <Button title={cancelLabel!} onPress={onClose} compact style={styles.actionHalf} />
+              </>
+            ) : (
+              <>
+                <Button
+                  title={cancelLabel!}
+                  onPress={onClose}
+                  variant="outline"
+                  compact
+                  style={styles.actionHalf}
+                />
+                <Button
+                  title={confirmLabel}
+                  onPress={handleConfirm}
+                  compact
+                  style={destructive ? styles.actionHalfDestructive : styles.actionHalf}
+                />
+              </>
+            )}
+          </View>
+        ) : isSuccess ? (
+          <Pressable
+            onPress={handleConfirm}
+            style={({ pressed }) => [styles.donePress, pressed && styles.pressed]}>
+            <LinearGradient
+              colors={[TxnKindSoft.income, Brand.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.doneBtn}>
+              <AppText variant="button" color="#fff">
+                {confirmLabel}
+              </AppText>
+            </LinearGradient>
+          </Pressable>
+        ) : (
+          <Button
+            title={confirmLabel}
+            onPress={handleConfirm}
+            compact
+            style={destructive ? styles.buttonDestructive : styles.button}
+          />
+        )}
       </View>
+    </View>
   );
 }
 

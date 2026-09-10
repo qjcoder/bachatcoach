@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Pressable, View } from 'react-native';
+import { StyleSheet, Pressable, View, Platform } from 'react-native';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
 import { normalizeLanguage } from '@/lib/language';
@@ -13,6 +14,19 @@ import { Brand } from '@/constants/theme';
 import { useColors } from '@/components/useColorScheme';
 
 type Purpose = 'login' | 'register';
+
+const RESEND_COOLDOWN_SEC = 60;
+
+function digitsOnly(value: string, max = 6) {
+  return value.replace(/\D/g, '').slice(0, max);
+}
+
+function extractOtp(raw: string) {
+  const digits = digitsOnly(raw, 32);
+  if (digits.length >= 6) return digits.slice(0, 6);
+  const match = raw.match(/\b(\d{6})\b/);
+  return match ? match[1] : '';
+}
 
 export default function EmailOtpScreen() {
   const { t, i18n } = useTranslation();
@@ -48,6 +62,7 @@ export default function EmailOtpScreen() {
     (err instanceof Error ? err.message : fallback);
 
   const handleSend = useCallback(async () => {
+    if (cooldown > 0) return;
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
       showAlert({ title: t('common.error'), message: t('auth.otpEmailRequired'), tone: 'error' });
@@ -61,7 +76,8 @@ export default function EmailOtpScreen() {
     try {
       const data = await sendEmailOtp(trimmed, purpose);
       setStep('code');
-      setCooldown(60);
+      setCode('');
+      setCooldown(RESEND_COOLDOWN_SEC);
       if (data.devCode) {
         showAlert({
           title: t('auth.otpSentTitle'),
@@ -84,7 +100,29 @@ export default function EmailOtpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [email, name, purpose, sendEmailOtp, showAlert, t]);
+  }, [cooldown, email, name, purpose, sendEmailOtp, showAlert, t]);
+
+  const handlePasteCode = useCallback(async () => {
+    try {
+      const clip = await Clipboard.getStringAsync();
+      const extracted = extractOtp(clip || '');
+      if (!extracted) {
+        showAlert({
+          title: t('auth.otpCode'),
+          message: t('auth.otpPasteEmpty'),
+          tone: 'warning',
+        });
+        return;
+      }
+      setCode(extracted);
+    } catch {
+      showAlert({
+        title: t('auth.otpCode'),
+        message: t('auth.otpPasteEmpty'),
+        tone: 'warning',
+      });
+    }
+  }, [showAlert, t]);
 
   const handleVerify = useCallback(async () => {
     const trimmedCode = code.trim();
@@ -204,15 +242,28 @@ export default function EmailOtpScreen() {
             icon="keypad-outline"
             placeholder="123456"
             value={code}
-            onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+            onChangeText={(v) => setCode(digitsOnly(v))}
             keyboardType="number-pad"
-            autoComplete="one-time-code"
+            autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+            textContentType="oneTimeCode"
+            importantForAutofill="yes"
+            autoCorrect={false}
             maxLength={6}
+            trailingIcon="clipboard-outline"
+            onTrailingPress={handlePasteCode}
           />
+          <AppText variant="caption" color={colors.muted} style={styles.spamHint}>
+            {t('auth.otpCheckSpam')}
+          </AppText>
+          <Pressable onPress={handlePasteCode} style={styles.pasteRow} hitSlop={8}>
+            <AppText variant="captionBold" color={Brand.primary}>
+              {t('auth.otpPaste')}
+            </AppText>
+          </Pressable>
           <Button
             title={loading ? t('common.loading') : t('auth.otpVerify')}
             onPress={handleVerify}
-            disabled={loading}
+            disabled={loading || code.length !== 6}
             style={styles.button}
           />
           <Pressable
@@ -223,7 +274,25 @@ export default function EmailOtpScreen() {
               {cooldown > 0 ? t('auth.otpResendIn', { sec: cooldown }) : t('auth.otpResend')}
             </AppText>
           </Pressable>
-          <Pressable onPress={() => setStep('email')} style={styles.resend}>
+          {cooldown > 0 ? (
+            <View style={[styles.cooldownTrack, { backgroundColor: colors.border }]}>
+              <View
+                style={[
+                  styles.cooldownFill,
+                  {
+                    backgroundColor: Brand.primary,
+                    width: `${Math.max(0, (cooldown / RESEND_COOLDOWN_SEC) * 100)}%`,
+                  },
+                ]}
+              />
+            </View>
+          ) : null}
+          <Pressable
+            onPress={() => {
+              setStep('email');
+              setCode('');
+            }}
+            style={styles.resend}>
             <AppText variant="caption" color={colors.muted}>
               {t('auth.otpChangeEmail')}
             </AppText>
@@ -245,9 +314,31 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
+  spamHint: {
+    marginTop: -2,
+    marginBottom: 4,
+    paddingHorizontal: 2,
+    lineHeight: 18,
+  },
+  pasteRow: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
   resend: {
     alignItems: 'center',
     paddingVertical: 10,
+  },
+  cooldownTrack: {
+    height: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  cooldownFill: {
+    height: '100%',
+    borderRadius: 2,
   },
   footerRow: {
     flexDirection: 'row',

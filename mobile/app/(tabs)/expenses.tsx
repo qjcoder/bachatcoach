@@ -28,6 +28,7 @@ import { getCategoryLabel } from '@/lib/category';
 import { useFormatPKR, formatAmount, formatTransactionDate, formatTransactionTime } from '@/lib/format';
 import { getCurrency } from '@/constants/currencies';
 import { useAuth } from '@/context/AuthContext';
+import { useDialog } from '@/context/DialogContext';
 import {
   getTransactionPeriodRange,
   periodFetchLimit,
@@ -60,6 +61,8 @@ type Transaction = {
   category?: string;
   customCategory?: string;
   paymentMethod?: string;
+  bankAccount?: string | null;
+  bankAccountName?: string;
   note?: string;
   tags?: string[];
   date: string;
@@ -104,6 +107,8 @@ function openEditParams(item: Transaction) {
     category: item.category || '',
     customCategory: item.customCategory || '',
     paymentMethod: item.paymentMethod || '',
+    bankAccount: item.bankAccount ? String(item.bankAccount) : '',
+    bankAccountName: item.bankAccountName || '',
     note: item.note || '',
     tags: Array.isArray(item.tags) ? JSON.stringify(item.tags) : '',
     date: item.date || '',
@@ -292,6 +297,7 @@ export default function ExpensesScreen() {
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
   const { bg, card, border, text, muted, chartEmpty, onBrand, field } = usePageChrome();
+  const { showAlert, showConfirm } = useDialog();
 
   const nowInit = new Date();
   const [flowMode, setFlowMode] = useState<FlowMode>('expense');
@@ -581,6 +587,39 @@ export default function ExpensesScreen() {
   const goEdit = (item: Transaction) => {
     closeDetails();
     router.push({ pathname: '/add-transaction', params: openEditParams(item) });
+  };
+
+  const confirmDelete = (item: Transaction) => {
+    const kindLabel = isSavingsTxn(item)
+      ? t('expenses.savings')
+      : item.type === 'income'
+        ? t('expenses.income')
+        : t('expenses.expense');
+    closeDetails();
+    showConfirm({
+      title: t('expenses.deleteTitle'),
+      message: t('expenses.deleteConfirm', { kind: kindLabel }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
+      tone: 'error',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.delete(`/transactions/${item._id}`);
+          setItems((prev) => prev.filter((row) => row._id !== item._id));
+          await Promise.all([
+            loadPeriod(period, flowMode, focusMonth, focusYear, true),
+            loadOverview(focusMonth, focusYear, true),
+          ]);
+        } catch {
+          showAlert({
+            title: t('common.error'),
+            message: t('expenses.deleteFailed'),
+            tone: 'error',
+          });
+        }
+      },
+    });
   };
 
   const openReceipt = (ref: string) => {
@@ -891,11 +930,27 @@ export default function ExpensesScreen() {
             icon="receipt-outline"
             title={
               isIncomeMode
-                ? t('expenses.noIncomePeriod', { defaultValue: 'No income in this period' })
+                ? t('expenses.emptyIncomeTitle')
                 : isSavingsMode
-                  ? t('expenses.noSavingsPeriod', { defaultValue: 'No savings in this period' })
-                  : t('expenses.noTransactionsPeriod')
+                  ? t('expenses.emptySavingsTitle')
+                  : t('expenses.emptyExpensesTitle')
             }
+            subtitle={
+              isIncomeMode
+                ? t('expenses.emptyIncomeHint')
+                : isSavingsMode
+                  ? t('expenses.emptySavingsHint')
+                  : t('expenses.emptyExpensesHint')
+            }
+            actionLabel={
+              isIncomeMode
+                ? t('expenses.emptyCtaIncome')
+                : isSavingsMode
+                  ? t('expenses.emptyCtaSavings')
+                  : t('expenses.emptyCtaExpense')
+            }
+            onAction={addTransaction}
+            accent={flowAccent}
           />
         }
         renderSectionHeader={({ section }) => (
@@ -974,19 +1029,25 @@ export default function ExpensesScreen() {
               value={formatTransactionTime(selected.date, i18n.language)}
               colors={colors}
             />
-            {!selectedIsIncome ? (
-              <DetailRow
-                label={t('expenses.paymentMethod')}
-                value={
-                  selected.paymentMethod
-                    ? t(`paymentMethods.${selected.paymentMethod}`, {
+            <DetailRow
+              label={
+                selectedIsIncome
+                  ? t('expenses.receivedIn')
+                  : selectedIsSavings
+                    ? t('expenses.fromShort')
+                    : t('expenses.paymentMethod')
+              }
+              value={
+                selected.paymentMethod
+                  ? selected.paymentMethod === 'bank' && selected.bankAccountName
+                    ? selected.bankAccountName
+                    : t(`paymentMethods.${selected.paymentMethod}`, {
                         defaultValue: selected.paymentMethod,
                       })
-                    : '—'
-                }
-                colors={colors}
-              />
-            ) : null}
+                  : '—'
+              }
+              colors={colors}
+            />
             <DetailRow
               label={t('expenses.note')}
               value={selected.note?.trim() || t('expenses.noNote')}
@@ -1021,6 +1082,12 @@ export default function ExpensesScreen() {
                 style={{ flex: 1 }}
               />
             </RTLRow>
+            <Button
+              title={t('common.delete')}
+              onPress={() => confirmDelete(selected)}
+              variant="outline"
+              style={{ marginTop: 10, borderColor: Brand.danger }}
+            />
           </>
         ) : null}
       </BottomSheet>

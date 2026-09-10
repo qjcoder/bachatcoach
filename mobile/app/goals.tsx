@@ -34,7 +34,6 @@ type Goal = {
 const GOAL_ICONS = GOAL_ICON_OPTIONS.map((o) => o.key);
 
 const SAVINGS = Brand.secondary;
-const SAVINGS_BTN = Brand.secondarySoft;
 
 export default function GoalsScreen() {
   const { t, i18n } = useTranslation();
@@ -104,14 +103,14 @@ export default function GoalsScreen() {
           title={t('goals.addGoal')}
           onPress={() => setModalVisible(true)}
           variant="secondary"
-          style={{ ...styles.addBtn, backgroundColor: SAVINGS_BTN }}
+          style={{ ...styles.addBtn, backgroundColor: SAVINGS }}
         />
       </View>
 
       <FlatList
         data={goals}
         keyExtractor={(g) => g._id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, goals.length === 0 && styles.listEmpty]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -123,7 +122,15 @@ export default function GoalsScreen() {
             tintColor={SAVINGS}
           />
         }
-        ListEmptyComponent={<EmptyState icon="flag-outline" title={t('goals.noGoals')} />}
+        ListEmptyComponent={
+          <EmptyState
+            icon="flag-outline"
+            title={t('goals.noGoals')}
+            actionLabel={t('goals.addGoal')}
+            onAction={() => setModalVisible(true)}
+            accent={SAVINGS}
+          />
+        }
         renderItem={({ item }) => {
           const pct = Math.min(100, Math.round((item.currentAmount / item.targetAmount) * 100));
           return (
@@ -238,8 +245,9 @@ export default function GoalsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { padding: Spacing.md, paddingBottom: Spacing.sm },
-  addBtn: { paddingVertical: 12 },
+  addBtn: { minHeight: 48 },
   list: { padding: Spacing.md, paddingTop: 0, paddingBottom: Spacing.xl },
+  listEmpty: { flexGrow: 1 },
   goalCard: { marginBottom: 12 },
   goalHeader: { marginBottom: 12, alignItems: 'center', width: '100%' },
   goalIconSlot: { flexShrink: 0 },

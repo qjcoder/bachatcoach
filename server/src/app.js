@@ -7,6 +7,8 @@ import contactRoutes from './routes/contacts.js';
 import goalRoutes from './routes/goals.js';
 import dashboardRoutes from './routes/dashboard.js';
 import backupRoutes from './routes/backup.js';
+import bankAccountRoutes from './routes/bankAccounts.js';
+import searchRoutes from './routes/search.js';
 import { PRIVACY_HTML, TERMS_HTML, ACCOUNT_DELETION_HTML } from './legalPages.js';
 
 const app = express();
@@ -45,6 +47,8 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/bank-accounts', bankAccountRoutes);
+app.use('/api/search', searchRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

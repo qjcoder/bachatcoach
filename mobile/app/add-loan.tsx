@@ -31,13 +31,12 @@ import { contactMatchesQuery, phoneKey } from '@/lib/phone';
 import { usePageChrome } from '@/hooks/usePageChrome';
 
 const H_PAD = 14;
-const HEADER_SIDE = 52;
 const SCREEN_H = Dimensions.get('window').height;
 const COMPACT = SCREEN_H < 820;
 const QUICK_AMOUNTS = [500, 1000, 5000, 10000] as const;
 const KEY_H = COMPACT ? 38 : 42;
 const KEY_GAP = 5;
-const AMOUNT_SIZE = COMPACT ? 34 : 40;
+const AMOUNT_SIZE = COMPACT ? 38 : 44;
 
 type Direction = 'i_lent' | 'i_borrowed';
 
@@ -92,6 +91,7 @@ export default function AddLoanScreen() {
   const [loading, setLoading] = useState(false);
   const [people, setPeople] = useState<Contact[]>([]);
   const [personQuery, setPersonQuery] = useState('');
+  const [personMenuOpen, setPersonMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(editingId || null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -116,9 +116,34 @@ export default function AddLoanScreen() {
 
   const goBackAfterSave = useCallback(() => {
     InteractionManager.runAfterInteractions(() => {
+      try {
+        if (router.canDismiss()) {
+          router.dismiss();
+          return;
+        }
+      } catch {
+        /* older router */
+      }
       if (router.canGoBack()) router.back();
       else router.replace('/(tabs)/loans');
     });
+  }, [router]);
+
+  const closeScreen = useCallback(() => {
+    Keyboard.dismiss();
+    try {
+      if (router.canDismiss()) {
+        router.dismiss();
+        return;
+      }
+    } catch {
+      /* older router */
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(tabs)/loans');
   }, [router]);
 
   useEffect(() => {
@@ -176,9 +201,11 @@ export default function AddLoanScreen() {
     : t('loans.dueDateOptional', { defaultValue: 'Due date (optional)' });
 
   const matches = useMemo(() => {
-    if (!personQuery.trim() || selectedId) return [];
-    return people.filter((c) => contactMatchesQuery(c, personQuery)).slice(0, 6);
-  }, [people, personQuery, selectedId]);
+    if (selectedId || !personMenuOpen) return [];
+    const q = personQuery.trim();
+    if (!q) return people;
+    return people.filter((c) => contactMatchesQuery(c, personQuery));
+  }, [people, personQuery, selectedId, personMenuOpen]);
 
   const onKey = useCallback((key: string) => {
     setAmount((prev) => {
@@ -207,6 +234,8 @@ export default function AddLoanScreen() {
     setNameUr(c.nameUr || '');
     setPhone(c.phone || '');
     setPersonQuery(getContactName(c, i18n.language));
+    setPersonMenuOpen(false);
+    Keyboard.dismiss();
     if (c.dueDate) {
       const d = new Date(c.dueDate);
       if (!Number.isNaN(d.getTime())) setDueDate(d);
@@ -216,6 +245,7 @@ export default function AddLoanScreen() {
   const clearPerson = () => {
     setSelectedId(null);
     setPersonQuery('');
+    setPersonMenuOpen(true);
     if (!isEditing) {
       setName('');
       setNameUr('');
@@ -295,16 +325,8 @@ export default function AddLoanScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
-      <View style={{ paddingTop: Math.max(insets.top, 6) }}>
-        <View style={[styles.topBar, { direction: 'ltr' }]}>
-          <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/loans'))}
-            hitSlop={10}
-            style={[styles.headerBackBtn, { backgroundColor: well }]}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}>
-            <Ionicons name="chevron-back" size={22} color={text} />
-          </Pressable>
+      <View style={[styles.headerBlock, { paddingTop: insets.top + 6 }]}>
+        <View style={styles.topBar}>
           <View style={styles.topCenter} pointerEvents="none">
             <View style={styles.headerTitleRow}>
               <AppText variant="h3" color={text} shrink>
@@ -314,17 +336,16 @@ export default function AddLoanScreen() {
                 {titleTail}
               </AppText>
             </View>
-            <AppText
-              variant="caption"
-              color={muted}
-              numberOfLines={1}
-              align="center"
-              style={styles.headerSubtitle}>
-              {tagline}
-            </AppText>
           </View>
-          <View style={styles.topSideSpacer} />
         </View>
+        <AppText
+          variant="caption"
+          color={muted}
+          numberOfLines={1}
+          align="center"
+          style={styles.headerSubtitle}>
+          {tagline}
+        </AppText>
       </View>
 
       <View style={styles.content}>
@@ -391,7 +412,21 @@ export default function AddLoanScreen() {
                   value={personQuery}
                   onChangeText={(v) => {
                     setPersonQuery(v);
-                    if (selectedId) clearPerson();
+                    setPersonMenuOpen(true);
+                    if (selectedId) {
+                      setSelectedId(null);
+                      if (!isEditing) {
+                        setName('');
+                        setNameUr('');
+                        setPhone('');
+                      }
+                    }
+                  }}
+                  onFocus={() => {
+                    if (!selectedId) setPersonMenuOpen(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setPersonMenuOpen(false), 180);
                   }}
                   placeholder={t('loans.searchPersonPlaceholder')}
                   placeholderTextColor={muted}
@@ -401,7 +436,19 @@ export default function AddLoanScreen() {
                   <Pressable onPress={clearPerson} hitSlop={8}>
                     <Ionicons name="close-circle" size={16} color={muted} />
                   </Pressable>
-                ) : null}
+                ) : (
+                  <Pressable
+                    onPress={() => setPersonMenuOpen((open) => !open)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('loans.searchPerson')}>
+                    <Ionicons
+                      name={personMenuOpen ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={muted}
+                    />
+                  </Pressable>
+                )}
               </View>
               {selectedId ? (
                 <View style={[styles.selectedCard, { backgroundColor: `${accent}14`, borderColor: `${accent}40` }]}>
@@ -411,26 +458,51 @@ export default function AddLoanScreen() {
                   </AppText>
                 </View>
               ) : null}
-              {matches.length > 0 ? (
-                <View style={styles.suggestBox}>
-                  {matches.slice(0, 3).map((person) => (
-                    <Pressable
-                      key={person._id}
-                      onPress={() => pickExisting(person)}
-                      style={[styles.suggestRow, { borderBottomColor: border }]}>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <AppText variant="captionBold" color={text} numberOfLines={1}>
-                          {getContactName(person, i18n.language)}
-                        </AppText>
-                        <AppText variant="caption" color={muted} numberOfLines={1}>
-                          {person.phone || t('loans.noPhone')}
-                        </AppText>
-                      </View>
-                      <AppText variant="captionBold" color={accent}>
-                        {currency.symbol} {formatAmount(person.balance || 0, i18n.language)}
+              {personMenuOpen && !selectedId ? (
+                <View
+                  style={[
+                    styles.suggestBox,
+                    { borderColor: border, backgroundColor: field },
+                  ]}>
+                  {matches.length > 0 ? (
+                    <ScrollView
+                      style={styles.suggestScroll}
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled>
+                      {matches.map((person, index) => (
+                        <Pressable
+                          key={person._id}
+                          onPress={() => pickExisting(person)}
+                          style={[
+                            styles.suggestRow,
+                            {
+                              borderBottomColor: border,
+                              borderBottomWidth: index === matches.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                            },
+                          ]}>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <AppText variant="captionBold" color={text} numberOfLines={1}>
+                              {getContactName(person, i18n.language)}
+                            </AppText>
+                            <AppText variant="caption" color={muted} numberOfLines={1}>
+                              {person.phone || t('loans.noPhone')}
+                            </AppText>
+                          </View>
+                          <AppText variant="captionBold" color={accent}>
+                            {currency.symbol} {formatAmount(person.balance || 0, i18n.language)}
+                          </AppText>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.suggestEmpty}>
+                      <AppText variant="caption" color={muted}>
+                        {people.length === 0
+                          ? t('loans.noPeopleYet', { defaultValue: 'No people yet' })
+                          : t('loans.noPersonMatch', { defaultValue: 'No matching person' })}
                       </AppText>
-                    </Pressable>
-                  ))}
+                    </View>
+                  )}
                 </View>
               ) : null}
             </>
@@ -557,20 +629,38 @@ export default function AddLoanScreen() {
           </View>
         ) : null}
 
-        <Pressable onPress={save} disabled={loading} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
-          <LinearGradient
-            colors={[...gradient]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.saveBtn, loading && { opacity: 0.65 }]}>
-            <RTLRow gap={8} style={{ justifyContent: 'center' }}>
-              <Ionicons name="checkmark-circle" size={18} color={onBrand} />
-              <AppText variant="button" color={onBrand}>
-                {loading ? t('common.loading') : t('common.save')}
-              </AppText>
-            </RTLRow>
-          </LinearGradient>
-        </Pressable>
+        <View style={styles.footerActions}>
+          <Pressable
+            onPress={closeScreen}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              { borderColor: border, backgroundColor: field, opacity: pressed ? 0.88 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.cancel')}>
+            <AppText variant="button" color={text}>
+              {t('common.cancel')}
+            </AppText>
+          </Pressable>
+          <Pressable
+            onPress={save}
+            disabled={loading}
+            style={({ pressed }) => [{ flex: 1.4, opacity: pressed ? 0.9 : 1 }]}>
+            <LinearGradient
+              colors={[...gradient]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.saveBtn, loading && { opacity: 0.65 }]}>
+              <RTLRow gap={8} style={{ justifyContent: 'center' }}>
+                <Ionicons name="checkmark-circle" size={18} color={onBrand} />
+                <AppText variant="button" color={onBrand}>
+                  {loading ? t('common.loading') : t('common.save')}
+                </AppText>
+              </RTLRow>
+            </LinearGradient>
+          </Pressable>
+        </View>
         </View>
       </View>
 
@@ -658,45 +748,43 @@ function Field({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  headerBlock: {},
   topBar: {
-    height: 52,
+    minHeight: 40,
     paddingHorizontal: H_PAD,
+    paddingBottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     position: 'relative',
     zIndex: 2,
   },
-  topSideSpacer: { width: HEADER_SIDE },
   topCenter: {
-    ...StyleSheet.absoluteFill,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: HEADER_SIDE + 4,
+    paddingHorizontal: H_PAD,
   },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  headerSubtitle: { marginTop: 1 },
-  headerBackBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 3,
-  },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
+  headerSubtitle: { marginTop: 1, marginBottom: 4, paddingHorizontal: H_PAD },
   content: {
     flex: 1,
     paddingHorizontal: H_PAD,
-    paddingTop: 4,
-    gap: COMPACT ? 8 : 10,
+    paddingTop: 2,
+    gap: COMPACT ? 6 : 8,
   },
   formScroll: {
     flex: 1,
   },
   formScrollContent: {
     flexGrow: 1,
-    gap: COMPACT ? 8 : 10,
-    paddingBottom: 4,
+    justifyContent: 'flex-start',
+    gap: COMPACT ? 6 : 8,
+    paddingBottom: 2,
   },
   composer: {
     gap: COMPACT ? 8 : 10,
@@ -706,8 +794,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 14,
-    paddingTop: COMPACT ? 12 : 14,
-    paddingBottom: COMPACT ? 10 : 12,
+    paddingTop: COMPACT ? 14 : 16,
+    paddingBottom: COMPACT ? 12 : 14,
     overflow: 'hidden',
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -726,8 +814,8 @@ const styles = StyleSheet.create({
   amountTop: {
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    minHeight: 44,
+    marginBottom: 12,
+    minHeight: COMPACT ? 46 : 52,
   },
   currencyChip: {
     flexDirection: 'row',
@@ -759,7 +847,7 @@ const styles = StyleSheet.create({
   quickPill: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: COMPACT ? 7 : 8,
+    paddingVertical: COMPACT ? 8 : 9,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
@@ -768,7 +856,7 @@ const styles = StyleSheet.create({
   panel: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    padding: COMPACT ? 10 : 12,
+    padding: COMPACT ? 8 : 10,
   },
   fieldGrid: {
     flexDirection: 'row',
@@ -776,7 +864,7 @@ const styles = StyleSheet.create({
     direction: 'ltr',
   },
   fieldHalf: { flex: 1, minWidth: 0 },
-  fieldWrap: { marginBottom: COMPACT ? 8 : 10 },
+  fieldWrap: { marginBottom: COMPACT ? 6 : 8 },
   fieldLabel: { marginBottom: 4, fontSize: 12 },
   fieldRow: {
     flexDirection: 'row',
@@ -804,7 +892,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  suggestBox: { marginTop: 4, marginBottom: 4 },
+  suggestBox: {
+    marginTop: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  suggestScroll: { maxHeight: COMPACT ? 160 : 200 },
+  suggestEmpty: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
   suggestRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -812,7 +911,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  flexSpacer: { flex: 1, minHeight: 4 },
+  flexSpacer: { flex: 1, minHeight: 0 },
   keypadTray: { gap: KEY_GAP },
   keyRow: { flexDirection: 'row', gap: KEY_GAP },
   key: {
@@ -825,8 +924,22 @@ const styles = StyleSheet.create({
   },
   keyPressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
   keyText: { fontWeight: '600', fontSize: 18 },
-  saveBtn: {
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     marginTop: 2,
+  },
+  cancelBtn: {
+    flex: 1,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    minHeight: COMPACT ? 46 : 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  saveBtn: {
     borderRadius: Radius.md,
     minHeight: COMPACT ? 46 : 50,
     alignItems: 'center',

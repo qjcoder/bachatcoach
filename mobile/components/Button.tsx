@@ -40,8 +40,8 @@ export function Button({ title, onPress, variant = 'primary', disabled, compact,
         variant="button"
         color={variant === 'outline' ? outlineAccent : '#FFFFFF'}
         numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}
+        align="center"
+        shrink
         style={styles.buttonText}>
         {title}
       </AppText>
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Brand.primary,
   },
-  buttonText: { textAlign: 'center', width: '100%' },
+  buttonText: { textAlign: 'center' },
   pressed: { opacity: 0.88 },
   disabled: { opacity: 0.5 },
 });

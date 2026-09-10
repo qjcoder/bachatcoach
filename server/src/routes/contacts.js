@@ -286,6 +286,56 @@ router.post('/:id/entry', async (req, res, next) => {
   }
 });
 
+router.patch('/:id/entry/:entryId', async (req, res, next) => {
+  try {
+    const contact = await Contact.findOne({ _id: req.params.id, user: req.userId });
+    if (!contact) return res.status(404).json({ message: 'Contact not found' });
+
+    const entry = contact.entries.id(req.params.entryId);
+    if (!entry) return res.status(404).json({ message: 'Entry not found' });
+
+    const { amount, note, date, type } = req.body;
+    if (amount != null && amount !== '') {
+      const amt = Number(amount);
+      if (!Number.isFinite(amt) || amt <= 0) {
+        return res.status(400).json({ message: 'Amount is required' });
+      }
+      entry.amount = amt;
+    }
+    if (typeof note === 'string') entry.note = note.trim();
+    if (date) entry.date = new Date(date);
+    if (
+      type &&
+      ['lent', 'received', 'repaid', 'paid_back'].includes(type)
+    ) {
+      entry.type = type;
+    }
+
+    contact.isSettled = contact.balance <= 0;
+    await contact.save();
+    res.json(contact);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id/entry/:entryId', async (req, res, next) => {
+  try {
+    const contact = await Contact.findOne({ _id: req.params.id, user: req.userId });
+    if (!contact) return res.status(404).json({ message: 'Contact not found' });
+
+    const entry = contact.entries.id(req.params.entryId);
+    if (!entry) return res.status(404).json({ message: 'Entry not found' });
+
+    entry.deleteOne();
+    contact.isSettled = contact.balance <= 0;
+    await contact.save();
+    res.json(contact);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch('/:id', async (req, res, next) => {
   try {
     const contact = await Contact.findOne({ _id: req.params.id, user: req.userId });

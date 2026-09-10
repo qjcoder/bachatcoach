@@ -16,16 +16,25 @@ import api from '@/lib/api';
 import { useFormatPKR } from '@/lib/format';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { EmptyState } from '@/components/EmptyState';
 import { LoanContactCard } from '@/components/LoanContactCard';
+import {
+  LoanPaymentSheet,
+  type LoanPaymentTarget,
+} from '@/components/LoanPaymentSheet';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { BottomSheet } from '@/components/BottomSheet';
 import { RTLRow } from '@/components/RTLRow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Radius, Spacing, TxnKind, TxnKindSoft } from '@/constants/theme';
+import { Brand, Radius, Spacing, TxnKind, TxnKindSoft } from '@/constants/theme';
 import { usePageChrome } from '@/hooks/usePageChrome';
+import { useAuth } from '@/context/AuthContext';
+import { useDialog } from '@/context/DialogContext';
 import { getContactName } from '@/lib/contact';
 import { contactMatchesQuery } from '@/lib/phone';
-import { localeForLanguage } from '@/lib/language';
+import { localeForLanguage, scriptLanguage } from '@/lib/language';
+import { getCurrency } from '@/constants/currencies';
+import { buildLoanReminderMessage, sendWhatsAppReminder } from '@/lib/whatsapp';
 
 const LENT = TxnKind.income;
 const BORROWED = TxnKind.expense;
@@ -83,6 +92,8 @@ export default function LoansScreen() {
   const formatPKR = useFormatPKR();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { showAlert } = useDialog();
   const { bg, card, border, text, muted, onBrand, field } = usePageChrome();
 
   const [tab, setTab] = useState<'i_lent' | 'i_borrowed'>('i_lent');
@@ -94,6 +105,8 @@ export default function LoansScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedLent, setExpandedLent] = useState(false);
   const [expandedBorrowed, setExpandedBorrowed] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<LoanPaymentTarget | null>(null);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
 
   const load = async (fresh = false) => {
     const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
@@ -246,6 +259,11 @@ export default function LoansScreen() {
     const tint = item.direction === 'i_lent' ? LENT : BORROWED;
     const opened = formatShortDate(item.openedOn || item.createdAt, i18n.language);
     const due = formatShortDate(item.dueDate, i18n.language);
+    const paymentLabel =
+      item.direction === 'i_lent'
+        ? t('loans.paymentReceived', { defaultValue: 'Received' })
+        : t('loans.paymentPaying', { defaultValue: 'Paying' });
+    const canRemind = item.direction === 'i_lent' && status !== 'repaid';
     return (
       <LoanContactCard
         key={item._id}
@@ -263,6 +281,52 @@ export default function LoansScreen() {
         tint={tint}
         onPress={() => router.push({ pathname: '/loan-ledger', params: { id: item._id } })}
         onLongPress={() => openEdit(item)}
+        paymentLabel={paymentLabel}
+        onPaymentPress={() =>
+          setPaymentTarget({
+            id: item._id,
+            name: getContactName(item, i18n.language),
+            direction: item.direction,
+            balance: item.balance,
+          })
+        }
+        remindLabel={canRemind ? t('loans.remind') : undefined}
+        reminding={remindingId === item._id}
+        onRemindPress={
+          canRemind
+            ? async () => {
+                const phone = item.phone?.trim();
+                if (!phone) {
+                  showAlert({
+                    title: t('loans.noPhone'),
+                    message: t('loans.addPhoneFirst'),
+                    tone: 'warning',
+                  });
+                  return;
+                }
+                setRemindingId(item._id);
+                try {
+                  const lang = scriptLanguage(i18n.language) === 'ur' ? 'ur' : 'en';
+                  const message = buildLoanReminderMessage(
+                    getContactName(item, i18n.language),
+                    item.balance,
+                    lang,
+                    getCurrency(user?.currency).code,
+                    item.dueDate
+                  );
+                  await sendWhatsAppReminder(phone, message);
+                } catch {
+                  showAlert({
+                    title: t('common.error'),
+                    message: t('loans.whatsappError'),
+                    tone: 'error',
+                  });
+                } finally {
+                  setRemindingId(null);
+                }
+              }
+            : undefined
+        }
       />
     );
   };
@@ -334,6 +398,25 @@ export default function LoansScreen() {
           accentColor={tabAccent}
           trackColor={field}
         />
+
+        {summary.overdueCount > 0 ? (
+          <Pressable
+            onPress={() => {
+              setStatusFilter('overdue');
+              setFilterOpen(false);
+            }}
+            style={[styles.overdueBanner, { backgroundColor: `${Brand.danger}14`, borderColor: `${Brand.danger}40` }]}
+            accessibilityRole="button">
+            <Ionicons name="alert-circle" size={18} color={Brand.danger} />
+            <AppText variant="captionBold" color={Brand.danger} style={{ flex: 1 }}>
+              {t('loans.overdueBanner', {
+                count: summary.overdueCount,
+                defaultValue: `${summary.overdueCount} overdue — tap to review`,
+              })}
+            </AppText>
+            <Ionicons name="chevron-forward" size={16} color={Brand.danger} />
+          </Pressable>
+        ) : null}
 
         <LinearGradient
           colors={[...heroColors]}
@@ -433,26 +516,15 @@ export default function LoansScreen() {
             </RTLRow>
 
             {lentPreview.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <View style={[styles.emptyIcon, { backgroundColor: `${LENT}14` }]}>
-                  <Ionicons name="document-text-outline" size={28} color={`${LENT}88`} />
-                </View>
-                <AppText variant="bodySemibold" color={text} align="center">
-                  {t('loans.noLentYet', { defaultValue: 'No lent loans yet' })}
-                </AppText>
-                <AppText variant="caption" color={muted} align="center">
-                  {t('loans.noLentHint', {
-                    defaultValue: 'Add a loan when you lend money to someone.',
-                  })}
-                </AppText>
-                <Pressable
-                  onPress={() => openAddLoan('i_lent')}
-                  style={[styles.emptyCta, { backgroundColor: LENT }]}>
-                  <AppText variant="captionBold" color={onBrand}>
-                    + {t('loans.addLoanLent', { defaultValue: 'Add Loan (Lent)' })}
-                  </AppText>
-                </Pressable>
-              </View>
+              <EmptyState
+                compact
+                icon="hand-left-outline"
+                title={t('loans.noLentYet')}
+                subtitle={t('loans.noLentHint')}
+                actionLabel={t('loans.emptyCtaLent')}
+                onAction={() => openAddLoan('i_lent')}
+                accent={LENT}
+              />
             ) : (
               <>
                 {lentPreview.map(renderLoanRow)}
@@ -499,31 +571,15 @@ export default function LoansScreen() {
             </RTLRow>
 
             {borrowedPreview.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <View style={[styles.emptyIcon, { backgroundColor: `${BORROWED}14` }]}>
-                  <Ionicons name="document-text-outline" size={28} color={`${BORROWED}88`} />
-                </View>
-                <AppText variant="bodySemibold" color={text} align="center">
-                  {t('loans.noBorrowedYet', { defaultValue: 'No borrowed loans yet' })}
-                </AppText>
-                <AppText variant="caption" color={muted} align="center">
-                  {t('loans.noBorrowedHint', {
-                    defaultValue: 'Add a loan when you borrow money from someone.',
-                  })}
-                </AppText>
-                <Pressable onPress={() => openAddLoan('i_borrowed')}>
-                  <LinearGradient
-                    colors={['#F43F5E', '#BE123C']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.emptyCta}>
-                    <AppText variant="captionBold" color={onBrand}>
-                      +{' '}
-                      {t('loans.addBorrowedLoan', { defaultValue: 'Add Borrowed Loan' })}
-                    </AppText>
-                  </LinearGradient>
-                </Pressable>
-              </View>
+              <EmptyState
+                compact
+                icon="hand-right-outline"
+                title={t('loans.noBorrowedYet')}
+                subtitle={t('loans.noBorrowedHint')}
+                actionLabel={t('loans.emptyCtaBorrowed')}
+                onAction={() => openAddLoan('i_borrowed')}
+                accent={BORROWED}
+              />
             ) : (
               <>
                 {borrowedPreview.map(renderLoanRow)}
@@ -622,9 +678,18 @@ export default function LoansScreen() {
         <Button
           title={t('common.done', { defaultValue: 'Done' })}
           onPress={() => setFilterOpen(false)}
-          style={{ marginTop: 16 }}
+          style={{ marginTop: 16, backgroundColor: tabAccent }}
         />
       </BottomSheet>
+
+      <LoanPaymentSheet
+        visible={!!paymentTarget}
+        target={paymentTarget}
+        onClose={() => setPaymentTarget(null)}
+        onSaved={() => {
+          load(true).catch(() => {});
+        }}
+      />
     </View>
   );
 }
@@ -710,6 +775,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: BORROWED,
   },
+  overdueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: Spacing.sm,
+  },
   filterChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -743,27 +818,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  emptyCta: {
-    marginTop: 10,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    alignItems: 'center',
   },
   viewAll: {
     marginTop: 10,

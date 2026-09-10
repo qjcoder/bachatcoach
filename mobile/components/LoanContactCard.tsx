@@ -34,6 +34,11 @@ type LoanContactCardProps = {
   tint: string;
   onPress?: () => void;
   onLongPress?: () => void;
+  paymentLabel?: string;
+  onPaymentPress?: () => void;
+  remindLabel?: string;
+  onRemindPress?: () => void;
+  reminding?: boolean;
 };
 
 export function LoanContactCard({
@@ -47,59 +52,95 @@ export function LoanContactCard({
   tint,
   onPress,
   onLongPress,
+  paymentLabel,
+  onPaymentPress,
+  remindLabel,
+  onRemindPress,
+  reminding,
 }: LoanContactCardProps) {
   const { s } = useLayoutScale();
   const { text, muted, border, onBrand } = usePageChrome();
   const avatarBg = avatarColorForName(name);
   const statusColor =
     status === 'overdue' ? Brand.danger : status === 'repaid' ? Brand.secondary : tint;
+  const showPayment = Boolean(paymentLabel && onPaymentPress && status !== 'repaid');
+  const showRemind = Boolean(remindLabel && onRemindPress && status !== 'repaid');
 
   return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.row, { borderBottomColor: border }, pressed && { opacity: 0.88 }]}>
-      <View style={[styles.avatar, { backgroundColor: avatarBg, width: s(44), height: s(44) }]}>
-        <AppText variant="bodySemibold" color={onBrand}>
-          {initialsForName(name)}
-        </AppText>
-      </View>
-
-      <View style={styles.mid}>
-        <AppText variant="bodySemibold" color={text} numberOfLines={1}>
-          {name}
-        </AppText>
-        {purpose ? (
-          <AppText variant="caption" color={muted} numberOfLines={1}>
-            {purpose}
-          </AppText>
-        ) : null}
-        <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaLine}>
-          {openedLabel}
-        </AppText>
-        {dueLabel ? (
-          <RTLRow gap={4} style={styles.dueRow}>
-            <Ionicons name="time-outline" size={12} color={muted} />
-            <AppText variant="caption" color={muted} numberOfLines={1}>
-              {dueLabel}
-            </AppText>
-          </RTLRow>
-        ) : null}
-      </View>
-
-      <View style={styles.right}>
-        <AppText variant="bodySemibold" color={text} numberOfLines={1} style={styles.amount}>
-          {amount}
-        </AppText>
-        <View style={[styles.badge, { borderColor: `${statusColor}88` }]}>
-          <AppText variant="captionBold" color={statusColor}>
-            {statusLabel}
+    <View style={[styles.wrap, { borderBottomColor: border }]}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.row, pressed && { opacity: 0.88 }]}>
+        <View style={[styles.avatar, { backgroundColor: avatarBg, width: s(44), height: s(44) }]}>
+          <AppText variant="bodySemibold" color={onBrand}>
+            {initialsForName(name)}
           </AppText>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={muted} style={styles.chevron} />
-      </View>
-    </Pressable>
+
+        <View style={styles.mid}>
+          <AppText variant="bodySemibold" color={text} numberOfLines={1}>
+            {name}
+          </AppText>
+          {purpose ? (
+            <AppText variant="caption" color={muted} numberOfLines={1}>
+              {purpose}
+            </AppText>
+          ) : null}
+          <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaLine}>
+            {openedLabel}
+          </AppText>
+          {dueLabel ? (
+            <RTLRow gap={4} style={styles.dueRow}>
+              <Ionicons name="time-outline" size={12} color={status === 'overdue' ? Brand.danger : muted} />
+              <AppText
+                variant="caption"
+                color={status === 'overdue' ? Brand.danger : muted}
+                numberOfLines={1}>
+                {dueLabel}
+              </AppText>
+            </RTLRow>
+          ) : null}
+        </View>
+
+        <View style={styles.right}>
+          <AppText variant="bodySemibold" color={text} numberOfLines={1} style={styles.amount}>
+            {amount}
+          </AppText>
+          <View style={[styles.badge, { borderColor: `${statusColor}88` }]}>
+            <AppText variant="captionBold" color={statusColor}>
+              {statusLabel}
+            </AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={muted} style={styles.chevron} />
+        </View>
+      </Pressable>
+
+      {showPayment || showRemind ? (
+        <View style={styles.actions}>
+          {showPayment ? (
+            <LoanActionButton
+              label={paymentLabel!}
+              icon={status === 'overdue' ? 'alert-circle-outline' : 'cash-outline'}
+              onPress={onPaymentPress!}
+              tint={tint}
+              variant="outline"
+            />
+          ) : null}
+          {showRemind ? (
+            <LoanActionButton
+              label={remindLabel!}
+              icon="logo-whatsapp"
+              onPress={onRemindPress!}
+              tint={Brand.whatsapp}
+              variant="outline"
+              loading={reminding}
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -156,12 +197,15 @@ export function LoanActionButton({
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 4,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
     paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   avatar: {
     borderRadius: 999,
@@ -181,6 +225,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   chevron: { marginTop: 2 },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 10,
+    paddingStart: 56,
+  },
   actionBtn: {
     flex: 1,
     minWidth: 0,

@@ -139,10 +139,107 @@ export const EXPENSE_CATEGORIES = [
   'other',
 ] as const;
 
+/** Subtypes under Bills — stored in `customCategory` as the slug. */
+export const BILLS_SUBCATEGORIES = [
+  'electricity',
+  'gas',
+  'water',
+  'internet',
+  'mobile',
+  'gym',
+  'tv',
+  'maintenance',
+] as const;
+
+/** Subtypes under Food — stored in `customCategory` as the slug. */
+export const FOOD_SUBCATEGORIES = ['kitchen', 'outdoor'] as const;
+
+/** Subtypes under Transport — stored in `customCategory` as the slug. */
+export const TRANSPORT_SUBCATEGORIES = ['fuel', 'rental', 'booking'] as const;
+
+export const RENT_SUBCATEGORIES = ['house', 'shop', 'office', 'room'] as const;
+
+export const SHOPPING_SUBCATEGORIES = ['clothes', 'electronics', 'grocery', 'home', 'kids'] as const;
+
+export const HEALTH_SUBCATEGORIES = ['medicine', 'doctor', 'lab', 'dental'] as const;
+
+export const ENTERTAINMENT_SUBCATEGORIES = ['movies', 'outing', 'games', 'events'] as const;
+
+export const EDUCATION_SUBCATEGORIES = ['fees', 'books', 'stationery', 'courses'] as const;
+
+export const SUBSCRIPTIONS_SUBCATEGORIES = ['streaming', 'software', 'news', 'cloud'] as const;
+
+/** Parent category → subtype slugs (and i18n namespace). */
+export const CATEGORY_SUBTYPES: Record<
+  string,
+  { options: readonly string[]; i18nKey: string; otherPlaceholderKey: string; requiredKey: string }
+> = {
+  bills: {
+    options: BILLS_SUBCATEGORIES,
+    i18nKey: 'billTypes',
+    otherPlaceholderKey: 'expenses.billOtherPlaceholder',
+    requiredKey: 'expenses.billTypeRequired',
+  },
+  food: {
+    options: FOOD_SUBCATEGORIES,
+    i18nKey: 'foodTypes',
+    otherPlaceholderKey: 'expenses.foodOtherPlaceholder',
+    requiredKey: 'expenses.foodTypeRequired',
+  },
+  transport: {
+    options: TRANSPORT_SUBCATEGORIES,
+    i18nKey: 'transportTypes',
+    otherPlaceholderKey: 'expenses.transportOtherPlaceholder',
+    requiredKey: 'expenses.transportTypeRequired',
+  },
+  rent: {
+    options: RENT_SUBCATEGORIES,
+    i18nKey: 'rentTypes',
+    otherPlaceholderKey: 'expenses.rentOtherPlaceholder',
+    requiredKey: 'expenses.rentTypeRequired',
+  },
+  shopping: {
+    options: SHOPPING_SUBCATEGORIES,
+    i18nKey: 'shoppingTypes',
+    otherPlaceholderKey: 'expenses.shoppingOtherPlaceholder',
+    requiredKey: 'expenses.shoppingTypeRequired',
+  },
+  health: {
+    options: HEALTH_SUBCATEGORIES,
+    i18nKey: 'healthTypes',
+    otherPlaceholderKey: 'expenses.healthOtherPlaceholder',
+    requiredKey: 'expenses.healthTypeRequired',
+  },
+  entertainment: {
+    options: ENTERTAINMENT_SUBCATEGORIES,
+    i18nKey: 'entertainmentTypes',
+    otherPlaceholderKey: 'expenses.entertainmentOtherPlaceholder',
+    requiredKey: 'expenses.entertainmentTypeRequired',
+  },
+  education: {
+    options: EDUCATION_SUBCATEGORIES,
+    i18nKey: 'educationTypes',
+    otherPlaceholderKey: 'expenses.educationOtherPlaceholder',
+    requiredKey: 'expenses.educationTypeRequired',
+  },
+  subscriptions: {
+    options: SUBSCRIPTIONS_SUBCATEGORIES,
+    i18nKey: 'subscriptionTypes',
+    otherPlaceholderKey: 'expenses.subscriptionOtherPlaceholder',
+    requiredKey: 'expenses.subscriptionTypeRequired',
+  },
+};
+
 export const INCOME_CATEGORIES = ['salary', 'freelance', 'gift', 'investment', 'other_income'] as const;
 
-export const PAYMENT_METHODS = ['cash', 'bank', 'jazzcash', 'easypaisa', 'card'] as const;
+export const PAYMENT_METHODS = ['cash', 'bank'] as const;
+
+/** Kept for older transactions still stored with these values. */
+export const LEGACY_PAYMENT_METHODS = ['jazzcash', 'easypaisa', 'card'] as const;
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+export type BillsSubcategory = (typeof BILLS_SUBCATEGORIES)[number];
+export type FoodSubcategory = (typeof FOOD_SUBCATEGORIES)[number];
+export type TransportSubcategory = (typeof TRANSPORT_SUBCATEGORIES)[number];
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];

@@ -1,6 +1,38 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { formatMoney } from '@/lib/format';
+
+function sanitizeFileNamePart(value: string): string {
+  return value
+    .trim()
+    .replace(/[^\w\u0600-\u06FF\s.-]+/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 60) || 'Ledger';
+}
+
+function buildLedgerPdfFileName(personName: string, generatedAt: string): string {
+  const when = new Date(generatedAt);
+  const valid = !Number.isNaN(when.getTime()) ? when : new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const date = `${valid.getFullYear()}-${pad(valid.getMonth() + 1)}-${pad(valid.getDate())}`;
+  const time = `${pad(valid.getHours())}-${pad(valid.getMinutes())}-${pad(valid.getSeconds())}`;
+  return `${sanitizeFileNamePart(personName)}_${date}_${time}.pdf`;
+}
+
+async function renamePdfForShare(uri: string, fileName: string): Promise<string> {
+  const cacheDir = FileSystem.cacheDirectory;
+  if (!cacheDir) return uri;
+  const dest = `${cacheDir}${fileName}`;
+  const info = await FileSystem.getInfoAsync(dest);
+  if (info.exists) {
+    await FileSystem.deleteAsync(dest, { idempotent: true });
+  }
+  await FileSystem.moveAsync({ from: uri, to: dest });
+  return dest;
+}
 
 export type LoanEntryReport = {
   id?: string;
@@ -349,6 +381,7 @@ export async function exportLoansSectionPdf(
 
 export type LoanContactReportDetail = LoanContactReport & {
   direction: 'i_lent' | 'i_borrowed';
+  dueDate?: string | null;
   summary: {
     totalOutstanding: number;
     totalGiven: number;
@@ -362,12 +395,14 @@ function buildSingleContactReportHtml(
   userName: string,
   lang: 'en' | 'ur',
   labels: LoansReportLabels,
-  sectionTitle: string
+  sectionTitle: string,
+  displayName?: string
 ) {
   const locale = lang === 'ur' ? 'ur-PK' : 'en-PK';
   const dir = lang === 'ur' ? 'rtl' : 'ltr';
   const align = lang === 'ur' ? 'right' : 'left';
   const accent = contact.direction === 'i_lent' ? '#047857' : '#DC2626';
+  const personName = displayName || contact.name;
   const generatedLabel = new Date(generatedAt).toLocaleString(locale, {
     day: 'numeric',
     month: 'long',
@@ -435,7 +470,7 @@ function buildSingleContactReportHtml(
 <body>
   <div class="header">
     <div class="brand">BachatCoach</div>
-    <div class="title">${contact.name}</div>
+    <div class="title">${personName}</div>
     <div class="meta">${sectionTitle} · ${userName}</div>
   </div>
   <div class="section-title">${sectionTitle}</div>
@@ -445,7 +480,7 @@ function buildSingleContactReportHtml(
     <div class="stat"><div class="stat-label">${labels.totalReturned}</div><div class="stat-value">${formatAmount(contact.summary.totalReturned, labels.currency, lang)}</div></div>
   </div>
   <div class="contact-card">
-    <div class="contact-name">${contact.name}</div>
+    <div class="contact-name">${personName}</div>
     <div class="contact-meta">${labels.phone}: ${contact.phone || '—'}</div>
     ${entriesHtml}
   </div>
@@ -460,17 +495,32 @@ export async function exportLoansContactPdf(
   userName: string,
   lang: 'en' | 'ur',
   labels: LoansReportLabels,
-  sectionTitle: string
+  sectionTitle: string,
+  displayName?: string
 ) {
-  const html = buildSingleContactReportHtml(contact, generatedAt, userName, lang, labels, sectionTitle);
+  const personName = displayName || contact.name;
+  const html = buildSingleContactReportHtml(
+    contact,
+    generatedAt,
+    userName,
+    lang,
+    labels,
+    sectionTitle,
+    personName
+  );
   const { uri } = await Print.printToFileAsync({ html });
+  const namedUri = await renamePdfForShare(
+    uri,
+    buildLedgerPdfFileName(personName, generatedAt)
+  );
   const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(uri, {
-      UTI: 'com.adobe.pdf',
-      mimeType: 'application/pdf',
-      dialogTitle: `${contact.name} — ${labels.title}`,
-    });
+  if (!canShare) {
+    throw new Error('Sharing is not available on this device');
   }
-  return uri;
+  await Sharing.shareAsync(namedUri, {
+    UTI: 'com.adobe.pdf',
+    mimeType: 'application/pdf',
+    dialogTitle: `${personName} — ${labels.title}`,
+  });
+  return namedUri;
 }

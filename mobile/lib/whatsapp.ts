@@ -11,17 +11,36 @@ function normalizePakPhone(phone: string): string {
   return digits;
 }
 
+function formatDueLabel(dueDate?: string | null, lang: 'en' | 'ur' = 'en'): string {
+  if (!dueDate) return '';
+  const d = new Date(dueDate);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return d.toLocaleDateString(lang === 'ur' ? 'ur-PK' : 'en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return '';
+  }
+}
+
 export function buildLoanReminderMessage(
   name: string,
   amount: number,
   lang: 'en' | 'ur',
-  currencyCode = 'PKR'
+  currencyCode = 'PKR',
+  dueDate?: string | null
 ): string {
   const formatted = formatMoney(amount, currencyCode, lang);
+  const dueLabel = formatDueLabel(dueDate, lang);
   if (lang === 'ur') {
-    return `السلام علیکم ${name}،\n\nیہ BachatCoach سے ایک دوستانہ یاد دہانی ہے۔ براہ کرم بقایا رقم ${formatted} واپس کرنے میں مدد کریں۔\n\nشکریہ!`;
+    const dueLine = dueLabel ? `\nمقررہ تاریخ: ${dueLabel}` : '';
+    return `السلام علیکم ${name}،\n\nیہ BachatCoach سے ایک دوستانہ یاد دہانی ہے۔ براہ کرم بقایا رقم ${formatted} واپس کرنے میں مدد کریں۔${dueLine}\n\nشکریہ!`;
   }
-  return `Hi ${name},\n\nThis is a friendly reminder from BachatCoach. Please return the outstanding amount of ${formatted} when convenient.\n\nThank you!`;
+  const dueLine = dueLabel ? `\nDue date: ${dueLabel}` : '';
+  return `Hi ${name},\n\nThis is a friendly reminder from BachatCoach. Please return the outstanding amount of ${formatted} when convenient.${dueLine}\n\nThank you!`;
 }
 
 export async function sendWhatsAppReminder(

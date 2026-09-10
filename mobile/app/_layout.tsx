@@ -29,7 +29,7 @@ export default function RootLayout() {
   const [loaded, error] = useAppFonts();
   const [langReady, setLangReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
 
   useEffect(() => {
     if (error) throw error;
@@ -66,6 +66,9 @@ export default function RootLayout() {
     headerTitleContainerStyle,
     headerTitleAlign: 'center' as const,
     headerShadowVisible: false,
+    // Avoid Expo route group label "(tabs)" on the iOS back pill
+    headerBackTitle: t('common.back'),
+    headerBackButtonDisplayMode: 'minimal' as const,
   };
 
   return (
@@ -90,24 +93,36 @@ function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
           <LockGate>
             <Stack screenOptions={headerOptions}>
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="(tabs)"
+                options={{ headerShown: false, title: t('common.back') }}
+              />
               <Stack.Screen
                 name="add-transaction"
                 options={{
-                  presentation: 'modal',
+                  // Regular stack push (not native modal) so close/back always works
+                  // and AppDialog can sit above this screen in the same window.
+                  animation: 'slide_from_bottom',
                   headerShown: false,
                 }}
               />
               <Stack.Screen
                 name="add-loan"
                 options={{
-                  presentation: 'modal',
+                  animation: 'slide_from_bottom',
                   headerShown: false,
                 }}
               />
               <Stack.Screen
                 name="loan-ledger"
                 options={{ title: t('loans.ledgerTitle'), ...headerOptions }}
+              />
+              <Stack.Screen
+                name="search"
+                options={{
+                  headerShown: false,
+                  animation: 'fade',
+                }}
               />
               <Stack.Screen
                 name="goals"

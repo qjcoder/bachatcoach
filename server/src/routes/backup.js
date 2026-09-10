@@ -5,6 +5,7 @@ import User, { BACKUP_FREQUENCIES } from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Contact from '../models/Contact.js';
 import Goal from '../models/Goal.js';
+import BankAccount from '../models/BankAccount.js';
 import { phoneKey } from '../lib/phone.js';
 
 const router = express.Router();
@@ -24,10 +25,11 @@ router.get('/export', async (req, res, next) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const [transactions, contacts, goals] = await Promise.all([
+    const [transactions, contacts, goals, bankAccounts] = await Promise.all([
       Transaction.find({ user: userId }).lean(),
       Contact.find({ user: userId }).lean(),
       Goal.find({ user: userId }).lean(),
+      BankAccount.find({ user: userId }).lean(),
     ]);
 
     const strip = (doc) => {
@@ -67,6 +69,7 @@ router.get('/export', async (req, res, next) => {
         };
       }),
       goals: goals.map(strip),
+      bankAccounts: bankAccounts.map(strip),
     });
   } catch (err) {
     next(err);
@@ -87,6 +90,7 @@ router.post('/restore', async (req, res, next) => {
     await Transaction.deleteMany({ user: userId });
     await Contact.deleteMany({ user: userId });
     await Goal.deleteMany({ user: userId });
+    await BankAccount.deleteMany({ user: userId });
 
     const txs = (payload.transactions || []).map((t) => {
       const type = ['expense', 'income', 'savings'].includes(t.type)
@@ -100,6 +104,7 @@ router.post('/restore', async (req, res, next) => {
         amount: t.amount,
         category: type === 'savings' ? 'savings' : t.category,
         paymentMethod: t.paymentMethod || 'cash',
+        bankAccountName: t.bankAccountName || '',
         note: t.note || '',
         customCategory: type === 'savings' ? '' : t.customCategory || '',
         date: t.date ? new Date(t.date) : new Date(),
@@ -108,6 +113,12 @@ router.post('/restore', async (req, res, next) => {
       };
     });
     if (txs.length) await Transaction.insertMany(txs);
+
+    const bankAccounts = (payload.bankAccounts || []).map((a) => ({
+      user: userId,
+      name: String(a.name || '').trim().slice(0, 80),
+    })).filter((a) => a.name);
+    if (bankAccounts.length) await BankAccount.insertMany(bankAccounts);
 
     const contacts = (payload.contacts || []).map((c) => ({
       user: userId,

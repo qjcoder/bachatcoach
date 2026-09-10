@@ -1,5 +1,6 @@
 import express from 'express';
 import Transaction from '../models/Transaction.js';
+import BankAccount from '../models/BankAccount.js';
 import { auth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -41,6 +42,34 @@ function normalizeTags(value) {
   ].slice(0, 12);
 }
 
+async function resolveBankAccount(userId, paymentMethod, bankAccountId) {
+  if (paymentMethod !== 'bank') {
+    return { bankAccount: null, bankAccountName: '' };
+  }
+  if (!bankAccountId) {
+    const err = new Error('Select a bank account');
+    err.status = 400;
+    throw err;
+  }
+  const account = await BankAccount.findOne({ _id: bankAccountId, user: userId }).lean();
+  if (!account) {
+    const err = new Error('Bank account not found');
+    err.status = 400;
+    throw err;
+  }
+  return { bankAccount: account._id, bankAccountName: account.name };
+}
+
+function serializeTxn(t) {
+  const doc = typeof t.toObject === 'function' ? t.toObject() : t;
+  return {
+    ...doc,
+    receiptImage: publicReceiptRef(doc.receiptImage),
+    bankAccount: doc.bankAccount ? String(doc.bankAccount) : null,
+    bankAccountName: doc.bankAccountName || '',
+  };
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const { type, month, year, category, from, to, limit = 50 } = req.query;
@@ -64,17 +93,14 @@ router.get('/', async (req, res, next) => {
     }
 
     const transactions = await Transaction.find(filter)
-      .select('type amount category customCategory paymentMethod note tags date receiptImage')
+      .select(
+        'type amount category customCategory paymentMethod bankAccount bankAccountName note tags date receiptImage'
+      )
       .sort({ date: -1 })
       .limit(Number(limit))
       .lean();
 
-    res.json(
-      transactions.map((t) => ({
-        ...t,
-        receiptImage: publicReceiptRef(t.receiptImage),
-      }))
-    );
+    res.json(transactions.map(serializeTxn));
   } catch (err) {
     next(err);
   }
@@ -84,10 +110,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId }).lean();
     if (!transaction) return res.status(404).json({ message: 'Transaction not found' });
-    res.json({
-      ...transaction,
-      receiptImage: publicReceiptRef(transaction.receiptImage),
-    });
+    res.json(serializeTxn(transaction));
   } catch (err) {
     next(err);
   }
@@ -98,7 +121,19 @@ router.patch('/:id', async (req, res, next) => {
     const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
     if (!transaction) return res.status(404).json({ message: 'Transaction not found' });
 
-    const { type, amount, category, paymentMethod, note, tags, customCategory, date, receiptImage } = req.body;
+    const {
+      type,
+      amount,
+      category,
+      paymentMethod,
+      bankAccount,
+      note,
+      tags,
+      customCategory,
+      date,
+      receiptImage,
+      recurringMonthly,
+    } = req.body;
 
     if (type != null) {
       if (!['expense', 'income', 'savings'].includes(type)) {
@@ -123,6 +158,9 @@ router.patch('/:id', async (req, res, next) => {
       transaction.tags = normalizeTags(tags);
     }
     if (date) transaction.date = new Date(date);
+    if (typeof recurringMonthly === 'boolean') {
+      transaction.recurringMonthly = recurringMonthly;
+    }
 
     if (customCategory != null) {
       const trimmedCustom = typeof customCategory === 'string' ? customCategory.trim() : '';
@@ -137,11 +175,17 @@ router.patch('/:id', async (req, res, next) => {
       transaction.receiptImage = acceptReceiptRef(receiptImage);
     }
 
+    if (paymentMethod != null || bankAccount !== undefined) {
+      const method =
+        paymentMethod != null ? paymentMethod : transaction.paymentMethod || 'cash';
+      if (paymentMethod != null) transaction.paymentMethod = method;
+      const resolved = await resolveBankAccount(req.userId, method, bankAccount);
+      transaction.bankAccount = resolved.bankAccount || undefined;
+      transaction.bankAccountName = resolved.bankAccountName;
+    }
+
     await transaction.save();
-    res.json({
-      ...transaction.toObject(),
-      receiptImage: publicReceiptRef(transaction.receiptImage),
-    });
+    res.json(serializeTxn(transaction));
   } catch (err) {
     next(err);
   }
@@ -149,7 +193,19 @@ router.patch('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { type, amount, category, paymentMethod, note, tags, customCategory, date, receiptImage } = req.body;
+    const {
+      type,
+      amount,
+      category,
+      paymentMethod,
+      bankAccount,
+      note,
+      tags,
+      customCategory,
+      date,
+      receiptImage,
+      recurringMonthly,
+    } = req.body;
     if (!type || amount == null) {
       return res.status(400).json({ message: 'Type and amount are required' });
     }
@@ -164,24 +220,26 @@ router.post('/', async (req, res, next) => {
     }
 
     const receiptRef = acceptReceiptRef(receiptImage);
+    const method = paymentMethod || 'cash';
+    const bank = await resolveBankAccount(req.userId, method, bankAccount);
 
     const transaction = await Transaction.create({
       user: req.userId,
       type,
       amount,
       category: resolvedCategory,
-      paymentMethod: type === 'income' ? undefined : paymentMethod || 'cash',
+      paymentMethod: method,
+      bankAccount: bank.bankAccount || undefined,
+      bankAccountName: bank.bankAccountName,
       note,
       tags: normalizeTags(tags),
       customCategory: type === 'savings' ? '' : trimmedCustom,
       date: date ? new Date(date) : new Date(),
       receiptImage: receiptRef,
+      recurringMonthly: type !== 'savings' && Boolean(recurringMonthly),
     });
 
-    res.status(201).json({
-      ...transaction.toObject(),
-      receiptImage: publicReceiptRef(transaction.receiptImage),
-    });
+    res.status(201).json(serializeTxn(transaction));
   } catch (err) {
     next(err);
   }

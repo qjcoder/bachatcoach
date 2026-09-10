@@ -72,6 +72,18 @@ type DashboardSummary = {
   categoryBreakdown?: Array<{ _id: string; total: number }>;
   recentTransactions?: RecentTxn[];
   goals?: Array<{ _id: string }>;
+  suggestions?: Array<{
+    id: string;
+    kind: 'salary' | 'recurring';
+    title: string;
+    subtitle?: string;
+    type: 'expense' | 'income' | 'savings';
+    category?: string;
+    customCategory?: string;
+    amount?: number | null;
+    note?: string;
+    paymentMethod?: string;
+  }>;
 };
 
 function initialsFromName(name: string) {
@@ -158,7 +170,7 @@ export default function HomeScreen() {
   const currency = getCurrency(user?.currency || 'PKR');
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { bg, card, border, text, muted, well, chartEmpty } = usePageChrome();
+  const { bg, card, border, text, muted, well, chartEmpty, field } = usePageChrome();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -210,7 +222,7 @@ export default function HomeScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.success} />}
       showsVerticalScrollIndicator={false}>
       {/* Top brand row */}
-      <RTLRow style={styles.topBar} gap={12}>
+        <RTLRow style={styles.topBar} gap={12}>
         <RTLRow gap={10} style={styles.brandBlock}>
           <BrandLogo size={44} />
           <View style={styles.brandText}>
@@ -230,10 +242,14 @@ export default function HomeScreen() {
             </RTLRow>
           </View>
         </RTLRow>
-        <RTLRow gap={10}>
-          <Pressable style={[styles.iconBtn, { backgroundColor: well, borderColor: border }]} hitSlop={8}>
-            <Ionicons name="notifications-outline" size={20} color={text} />
-            <View style={[styles.notifDot, { borderColor: bg }]} />
+        <RTLRow gap={8}>
+          <Pressable
+            onPress={() => router.push('/search')}
+            hitSlop={8}
+            style={[styles.searchBtn, { backgroundColor: field }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('search.title')}>
+            <Ionicons name="search-outline" size={20} color={text} />
           </Pressable>
           <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={8}>
             {user?.avatar ? (
@@ -317,6 +333,61 @@ export default function HomeScreen() {
           </View>
         </RTLRow>
       </LinearGradient>
+
+      {(summary?.suggestions?.length || 0) > 0 ? (
+        <View style={styles.suggestBlock}>
+          <AppText variant="h3" color={text} style={styles.suggestTitle}>
+            {t('dashboard.suggestions')}
+          </AppText>
+          {summary!.suggestions!.map((s) => (
+            <Pressable
+              key={s.id}
+              onPress={() =>
+                router.push({
+                  pathname: '/add-transaction',
+                  params: {
+                    type: s.type,
+                    ...(s.category ? { category: s.category } : {}),
+                    ...(s.customCategory ? { customCategory: s.customCategory } : {}),
+                    ...(s.amount != null ? { amount: String(s.amount) } : {}),
+                    ...(s.note ? { note: s.note } : {}),
+                    recurringMonthly: s.kind === 'recurring' ? '1' : '0',
+                  },
+                })
+              }
+              style={[styles.suggestRow, { backgroundColor: card, borderColor: border }]}>
+              <View
+                style={[
+                  styles.suggestIcon,
+                  {
+                    backgroundColor: `${
+                      s.kind === 'salary' ? TxnKind.income : TxnKind.expense
+                    }18`,
+                  },
+                ]}>
+                <Ionicons
+                  name={s.kind === 'salary' ? 'cash-outline' : 'repeat-outline'}
+                  size={18}
+                  color={s.kind === 'salary' ? TxnKind.income : TxnKind.expense}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <AppText variant="bodySemibold" color={text} numberOfLines={1}>
+                  {s.title}
+                </AppText>
+                {s.subtitle ? (
+                  <AppText variant="caption" color={muted} numberOfLines={1}>
+                    {s.subtitle}
+                  </AppText>
+                ) : null}
+              </View>
+              <AppText variant="captionBold" color={TxnKindSoft.income}>
+                {s.kind === 'salary' ? t('dashboard.suggestSalary') : t('dashboard.suggestRecurring')}
+              </AppText>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {/* Quick Add — immediately under Saved This Month */}
       <RTLRow style={styles.sectionHead} gap={8}>
@@ -549,24 +620,6 @@ const styles = StyleSheet.create({
   brandText: { flexShrink: 1, minWidth: 0 },
   brandTitleRow: { alignItems: 'baseline' },
   dateInline: { marginTop: 2, alignItems: 'center' },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifDot: {
-    position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
-    borderWidth: 1,
-  },
   avatarFallback: {
     width: 36,
     height: 36,
@@ -574,6 +627,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(52,211,153,0.15)',
     borderWidth: 1,
     borderColor: 'rgba(52,211,153,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  suggestBlock: {
+    marginHorizontal: Spacing.md,
+    marginBottom: 12,
+    gap: 8,
+  },
+  suggestTitle: { marginBottom: 2 },
+  suggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  suggestIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },

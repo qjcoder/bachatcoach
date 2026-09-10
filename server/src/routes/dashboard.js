@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Transaction from '../models/Transaction.js';
 import Contact from '../models/Contact.js';
 import Goal from '../models/Goal.js';
+import User from '../models/User.js';
 import { auth } from '../middleware/auth.js';
 import { getDailyQuote } from '../data/dailyQuotes.js';
 
@@ -78,7 +79,8 @@ router.get('/summary', async (req, res, next) => {
     const prevYear = month === 1 ? year - 1 : year;
     const prevRange = monthRange(prevMonth, prevYear);
 
-    const [txFacet, lentContacts, borrowedContacts, goals] = await Promise.all([
+    const [txFacet, lentContacts, borrowedContacts, goals, userDoc, recurringTemplates] =
+      await Promise.all([
       Transaction.aggregate([
         {
           $match: {
@@ -132,6 +134,18 @@ router.get('/summary', async (req, res, next) => {
                 },
               },
             ],
+            currentFull: [
+              { $match: { date: { $gte: start, $lt: end } } },
+              {
+                $project: {
+                  type: 1,
+                  category: 1,
+                  customCategory: 1,
+                  amount: 1,
+                  note: 1,
+                },
+              },
+            ],
           },
         },
       ]),
@@ -142,6 +156,16 @@ router.get('/summary', async (req, res, next) => {
         .select('direction entries')
         .lean(),
       Goal.find({ user: req.userId, isCompleted: false }).lean(),
+      User.findById(req.userId).select('salaryDay').lean(),
+      Transaction.find({
+        user: req.userId,
+        recurringMonthly: true,
+        date: { $lt: start },
+      })
+        .sort({ date: -1 })
+        .limit(40)
+        .select('type category customCategory amount note paymentMethod')
+        .lean(),
     ]);
 
     const facet = txFacet[0] || {};
@@ -173,6 +197,58 @@ router.get('/summary', async (req, res, next) => {
               : `Highest spend on ${topCategory._id} — cut 10% to save ~₨${Math.round(topCategory.total * 0.1)}`,
         }
       : null;
+
+    const suggestions = [];
+    const salaryDay = Number(userDoc?.salaryDay) || 1;
+    const today = now.getDate();
+    const dayDiff = Math.abs(today - salaryDay);
+    const nearSalary = dayDiff <= 2 || (salaryDay >= 28 && today >= 28);
+    const hasSalaryThisMonth = (facet.currentFull || []).some(
+      (t) => t.type === 'income' && t.category === 'salary'
+    );
+    if (nearSalary && !hasSalaryThisMonth) {
+      suggestions.push({
+        id: 'salary',
+        kind: 'salary',
+        title: lang === 'ur' ? 'تنخواہ درج کریں؟' : 'Log salary?',
+        subtitle:
+          lang === 'ur'
+            ? `آج کے قریب آپ کا تنخواہ دن (${salaryDay}) ہے`
+            : `Your salary day (${salaryDay}) is near`,
+        type: 'income',
+        category: 'salary',
+        amount: null,
+      });
+    }
+
+    const seenKeys = new Set();
+    const thisMonthKeys = new Set(
+      (facet.currentFull || []).map(
+        (t) =>
+          `${t.type}|${t.category || ''}|${t.customCategory || ''}|${Number(t.amount)}|${String(t.note || '').trim().toLowerCase()}`
+      )
+    );
+    for (const tmpl of recurringTemplates || []) {
+      const key = `${tmpl.type}|${tmpl.category || ''}|${tmpl.customCategory || ''}|${Number(tmpl.amount)}|${String(tmpl.note || '').trim().toLowerCase()}`;
+      if (seenKeys.has(key) || thisMonthKeys.has(key)) continue;
+      seenKeys.add(key);
+      suggestions.push({
+        id: `recurring-${key}`,
+        kind: 'recurring',
+        title:
+          lang === 'ur'
+            ? 'ماہانہ دہرائی'
+            : 'Monthly repeat',
+        subtitle: String(tmpl.note || tmpl.customCategory || tmpl.category || '').trim() || undefined,
+        type: tmpl.type,
+        category: tmpl.category || '',
+        customCategory: tmpl.customCategory || '',
+        amount: tmpl.amount,
+        note: tmpl.note || '',
+        paymentMethod: tmpl.paymentMethod || 'cash',
+      });
+      if (suggestions.length >= 5) break;
+    }
 
     res.json({
       month,
@@ -206,6 +282,7 @@ router.get('/summary', async (req, res, next) => {
         source: dailyQuote.source,
       },
       savingsOpportunity,
+      suggestions,
     });
   } catch (err) {
     next(err);

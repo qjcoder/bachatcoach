@@ -26,7 +26,7 @@ type User = {
   lastBackupAt?: string | null;
 };
 
-type ProfilePatch = Partial<Pick<User, 'currency' | 'avatar' | 'name' | 'nameUr' | 'language'>>;
+type ProfilePatch = Partial<Pick<User, 'currency' | 'avatar' | 'name' | 'nameUr' | 'language' | 'salaryDay'>>;
 
 type AuthContextType = {
   user: User | null;

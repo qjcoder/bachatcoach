@@ -1,4 +1,4 @@
-import { View, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Image, Pressable, StyleSheet, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -16,25 +16,58 @@ type ReceiptUploadProps = {
   dark?: boolean;
 };
 
-export async function pickReceiptImage(source: 'library' | 'camera') {
-  const permission =
+export type PickReceiptResult =
+  | { ok: true; uri: string }
+  | { ok: false; reason: 'permission' | 'canceled' | 'settings' };
+
+async function ensureMediaPermission(source: 'library' | 'camera'): Promise<{
+  granted: boolean;
+  canAskAgain: boolean;
+}> {
+  const current =
+    source === 'camera'
+      ? await ImagePicker.getCameraPermissionsAsync()
+      : await ImagePicker.getMediaLibraryPermissionsAsync();
+
+  if (current.granted) return { granted: true, canAskAgain: true };
+
+  const requested =
     source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) return null;
 
-  return source === 'camera'
-    ? ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.6,
-      })
-    : ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.6,
-      });
+  return {
+    granted: requested.granted,
+    canAskAgain: requested.canAskAgain !== false,
+  };
+}
+
+/** Request OS permission (after in-app rationale), then open camera/library. */
+export async function pickReceiptImage(source: 'library' | 'camera'): Promise<PickReceiptResult> {
+  const permission = await ensureMediaPermission(source);
+  if (!permission.granted) {
+    return { ok: false, reason: permission.canAskAgain ? 'permission' : 'settings' };
+  }
+
+  const result =
+    source === 'camera'
+      ? await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.6,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.6,
+        });
+
+  if (result.canceled || !result.assets[0]?.uri) {
+    return { ok: false, reason: 'canceled' };
+  }
+
+  return { ok: true, uri: result.assets[0].uri };
 }
 
 export function ReceiptUpload({
@@ -44,7 +77,7 @@ export function ReceiptUpload({
   dark = false,
 }: ReceiptUploadProps) {
   const { t } = useTranslation();
-  const { showAlert } = useDialog();
+  const { showAlert, showConfirm } = useDialog();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
   const text = dark ? '#FFFFFF' : colors.text;
@@ -52,20 +85,47 @@ export function ReceiptUpload({
   const field = dark ? 'rgba(255,255,255,0.06)' : colors.field;
   const border = dark ? 'rgba(255,255,255,0.1)' : colors.border;
 
-  const handlePick = async (source: 'library' | 'camera') => {
-    const result = await pickReceiptImage(source);
-
-    if (!result) {
-      showAlert({
+  const handleDenied = (reason: 'permission' | 'settings') => {
+    if (reason === 'settings') {
+      showConfirm({
         title: t('expenses.receipt'),
-        message: t('expenses.photoPermission'),
+        message: t('expenses.photoPermissionSettings'),
+        confirmLabel: t('expenses.openSettings'),
+        cancelLabel: t('common.cancel'),
         tone: 'warning',
+        onConfirm: () => {
+          void Linking.openSettings();
+        },
       });
       return;
     }
+    showAlert({
+      title: t('expenses.receipt'),
+      message: t('expenses.photoPermission'),
+      tone: 'warning',
+    });
+  };
 
-    if (result.canceled || !result.assets[0]?.uri) return;
-    onChange({ uri: result.assets[0].uri });
+  const handlePick = (source: 'library' | 'camera') => {
+    showConfirm({
+      title: t('expenses.photoPermissionTitle'),
+      message:
+        source === 'camera'
+          ? t('expenses.photoPermissionCamera')
+          : t('expenses.photoPermissionLibrary'),
+      confirmLabel: t('common.continue'),
+      cancelLabel: t('common.cancel'),
+      tone: 'info',
+      onConfirm: async () => {
+        const result = await pickReceiptImage(source);
+        if (result.ok) {
+          onChange({ uri: result.uri });
+          return;
+        }
+        if (result.reason === 'canceled') return;
+        handleDenied(result.reason);
+      },
+    });
   };
 
   return (

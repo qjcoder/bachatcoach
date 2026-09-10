@@ -387,7 +387,7 @@ router.delete('/account', auth, async (req, res, next) => {
 
 router.patch('/profile', auth, async (req, res, next) => {
   try {
-    const { currency, language, name, nameUr, avatar } = req.body;
+    const { currency, language, name, nameUr, avatar, salaryDay } = req.body;
     const updates = {};
     if (currency) updates.currency = String(currency).toUpperCase();
     if (language) updates.language = language;
@@ -398,6 +398,13 @@ router.patch('/profile', auth, async (req, res, next) => {
         return res.status(400).json({ message: 'Profile image is too large' });
       }
       updates.avatar = avatar ? String(avatar) : '';
+    }
+    if (salaryDay !== undefined && salaryDay !== null && salaryDay !== '') {
+      const day = Number(salaryDay);
+      if (!Number.isInteger(day) || day < 1 || day > 31) {
+        return res.status(400).json({ message: 'Salary day must be 1–31' });
+      }
+      updates.salaryDay = day;
     }
 
     const user = await User.findByIdAndUpdate(req.userId, updates, { new: true });

@@ -38,6 +38,7 @@ import {
 } from '@/lib/lock';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { openFeedbackEmail, openRateApp, openSupportEmail } from '@/lib/supportLinks';
 import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { PinBoxes } from '@/components/PinBoxes';
@@ -55,6 +56,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { pickProfileFromCamera, pickProfileFromLibrary } from '@/lib/profileImage';
 import { useUserDisplayName } from '@/hooks/useUserDisplayName';
 import { DriveBackupSection } from '@/components/DriveBackupSection';
+import { BankAccountsMenuRow } from '@/components/BankAccountsSection';
 import { DeleteAccountDialog } from '@/components/DeleteAccountDialog';
 import { SignOutDialog } from '@/components/SignOutDialog';
 import type { ThemeMode } from '@/context/ThemeContext';
@@ -103,6 +105,7 @@ export default function SettingsScreen() {
   const [savingLanguage, setSavingLanguage] = useState(false);
   const [currencyModal, setCurrencyModal] = useState(false);
   const [currencySearch, setCurrencySearch] = useState('');
+  const [salaryDayModal, setSalaryDayModal] = useState(false);
   const [savingCurrency, setSavingCurrency] = useState(false);
   const [photoModal, setPhotoModal] = useState(false);
   const [savingPhoto, setSavingPhoto] = useState(false);
@@ -344,20 +347,48 @@ export default function SettingsScreen() {
   };
 
   const pickPhoto = async (source: 'camera' | 'library') => {
-    const picked = source === 'camera' ? await pickProfileFromCamera() : await pickProfileFromLibrary();
-    if (!picked) {
-      showAlert({
-        title: t('settings.changePhoto'),
-        message: t('settings.photoPermission'),
-        tone: 'warning',
-      });
-      return;
-    }
-    if (!picked.base64) {
-      showAlert({ title: t('settings.photoUpdateFailed'), tone: 'error' });
-      return;
-    }
-    await saveAvatar(picked.base64);
+    setPhotoModal(false);
+    showConfirm({
+      title: t('settings.photoPermissionTitle'),
+      message:
+        source === 'camera'
+          ? t('settings.photoPermissionCamera')
+          : t('settings.photoPermissionLibrary'),
+      confirmLabel: t('common.continue'),
+      cancelLabel: t('common.cancel'),
+      tone: 'info',
+      onConfirm: async () => {
+        const result =
+          source === 'camera' ? await pickProfileFromCamera() : await pickProfileFromLibrary();
+        if (!result.ok) {
+          if (result.reason === 'canceled') return;
+          if (result.reason === 'settings') {
+            showConfirm({
+              title: t('settings.changePhoto'),
+              message: t('settings.photoPermissionSettings'),
+              confirmLabel: t('settings.openSettings'),
+              cancelLabel: t('common.cancel'),
+              tone: 'warning',
+              onConfirm: () => {
+                void Linking.openSettings();
+              },
+            });
+            return;
+          }
+          showAlert({
+            title: t('settings.changePhoto'),
+            message: t('settings.photoPermission'),
+            tone: 'warning',
+          });
+          return;
+        }
+        if (!result.image.base64) {
+          showAlert({ title: t('settings.photoUpdateFailed'), tone: 'error' });
+          return;
+        }
+        await saveAvatar(result.image.base64);
+      },
+    });
   };
 
   const removePhoto = async () => {
@@ -443,10 +474,6 @@ export default function SettingsScreen() {
     }
   };
 
-  const showComingSoon = () => {
-    showAlert({ title: t('settings.advancedSoon'), tone: 'info' });
-  };
-
   const switchTrack = { false: scheme === 'dark' ? '#334155' : '#CBD5E1', true: Brand.primary };
   const rowTheme = {
     textColor: colors.text,
@@ -503,14 +530,6 @@ export default function SettingsScreen() {
 
       <Section title={t('settings.account')} colors={colors}>
         <SettingsMenuRow
-          icon="person-outline"
-          label={t('settings.personalInformation')}
-          subtitle={displayName || '—'}
-          onPress={openProfileEditor}
-          right={<Ionicons name="create-outline" size={18} color={Brand.primary} />}
-          {...rowTheme}
-        />
-        <SettingsMenuRow
           icon="language-outline"
           label={t('settings.language')}
           subtitle={currentLanguage.nativeName}
@@ -522,8 +541,22 @@ export default function SettingsScreen() {
           label={t('settings.currency')}
           subtitle={currentCurrency.code}
           onPress={() => setCurrencyModal(true)}
-          last
           {...rowTheme}
+        />
+        <SettingsMenuRow
+          icon="calendar-outline"
+          label={t('settings.salaryDay')}
+          subtitle={t('settings.salaryDaySubtitle', {
+            day: user?.salaryDay || 1,
+            defaultValue: `Day ${user?.salaryDay || 1} of each month`,
+          })}
+          onPress={() => setSalaryDayModal(true)}
+          {...rowTheme}
+        />
+        <BankAccountsMenuRow
+          rowTheme={rowTheme}
+          currencyCode={user?.currency || currentCurrency.code}
+          last
         />
       </Section>
 
@@ -600,6 +633,7 @@ export default function SettingsScreen() {
         <SettingsMenuRow
           icon="notifications-outline"
           label={t('settings.pushNotifications')}
+          last
           {...rowTheme}
           right={
             <Switch
@@ -609,38 +643,6 @@ export default function SettingsScreen() {
               thumbColor="#fff"
             />
           }
-        />
-        <SettingsMenuRow
-          icon="mail-outline"
-          label={t('settings.emailNotifications')}
-          subtitle={t('settings.emailNotificationsSubtitle')}
-          onPress={() => Linking.openURL('mailto:qjcoder@gmail.com')}
-          last
-          {...rowTheme}
-        />
-      </Section>
-
-      <Section title={t('settings.preferences')} colors={colors}>
-        <SettingsMenuRow
-          icon="home-outline"
-          label={t('settings.defaultView')}
-          subtitle={t('settings.defaultViewSubtitle')}
-          onPress={showComingSoon}
-          {...rowTheme}
-        />
-        <SettingsMenuRow
-          icon="options-outline"
-          label={t('settings.dataPreferences')}
-          subtitle={t('settings.dataPreferencesSubtitle')}
-          onPress={() => setCurrencyModal(true)}
-          {...rowTheme}
-        />
-        <SettingsMenuRow
-          icon="construct-outline"
-          label={t('settings.advancedSettings')}
-          onPress={showComingSoon}
-          last
-          {...rowTheme}
         />
       </Section>
 
@@ -660,19 +662,25 @@ export default function SettingsScreen() {
         <SettingsMenuRow
           icon="help-circle-outline"
           label={t('settings.contactSupport')}
-          onPress={() => Linking.openURL('mailto:qjcoder@gmail.com')}
+          onPress={() => {
+            void openSupportEmail();
+          }}
           {...rowTheme}
         />
         <SettingsMenuRow
           icon="chatbubble-ellipses-outline"
           label={t('settings.sendFeedback')}
-          onPress={() => Linking.openURL('mailto:qjcoder@gmail.com?subject=BachatCoach%20Feedback')}
+          onPress={() => {
+            void openFeedbackEmail();
+          }}
           {...rowTheme}
         />
         <SettingsMenuRow
           icon="star-outline"
           label={t('settings.rateApp')}
-          onPress={() => Linking.openURL('https://bachatcoach.com')}
+          onPress={() => {
+            void openRateApp();
+          }}
           last
           {...rowTheme}
         />
@@ -866,6 +874,43 @@ export default function SettingsScreen() {
       </BottomSheet>
 
       <BottomSheet
+        visible={salaryDayModal}
+        title={t('settings.salaryDay')}
+        onClose={() => setSalaryDayModal(false)}>
+        <AppText variant="caption" color={colors.muted} style={{ marginBottom: 12 }}>
+          {t('settings.salaryDayHint')}
+        </AppText>
+        <View style={styles.dayGrid}>
+          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+            const selected = (user?.salaryDay || 1) === day;
+            return (
+              <Pressable
+                key={day}
+                onPress={async () => {
+                  try {
+                    await updateProfile({ salaryDay: day });
+                    setSalaryDayModal(false);
+                  } catch {
+                    showAlert({ title: t('common.error'), tone: 'error' });
+                  }
+                }}
+                style={[
+                  styles.dayChip,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                  selected && { borderColor: Brand.primary, backgroundColor: `${Brand.primary}18` },
+                ]}>
+                <AppText
+                  variant="captionBold"
+                  color={selected ? Brand.primary : colors.text}>
+                  {day}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
         visible={currencyModal}
         title={t('settings.selectCurrency')}
         scrollable={false}
@@ -1053,6 +1098,19 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   sheetItem: { paddingVertical: 16 },
   listSheet: { maxHeight: 440, marginTop: 8 },
+  dayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dayChip: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   pickerRow: {
     paddingVertical: 12,
     paddingHorizontal: 4,

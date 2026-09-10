@@ -79,7 +79,7 @@ function SnapshotFrost({ active, uri, isDark }: SnapshotFrostProps) {
   if (!active || !uri) return null;
 
   return (
-    <View style={styles.frost} pointerEvents="none">
+    <View style={styles.frost} pointerEvents="auto">
       <Image
         source={{ uri }}
         style={StyleSheet.absoluteFill}
@@ -133,6 +133,7 @@ export function BlurOverlayProvider({
     setFrosted(frostCountRef.current > 0);
   }, []);
 
+  /** Root frost paints the dim; keep app interactive under it except via the dismiss hit target. */
   const showFrost = frosted || portalCount > 0;
 
   useEffect(() => {
@@ -197,13 +198,15 @@ export function BlurOverlayProvider({
               blurTargetRef.current = node;
             }}
             style={[styles.root, showFrost && snapshotUri ? styles.contentHidden : null]}
-            collapsable={false}
-            pointerEvents={showFrost ? 'none' : 'auto'}>
+            collapsable={false}>
             {children}
           </View>
           <SnapshotFrost active={showFrost} uri={snapshotUri} isDark={isDark} />
-          {overlay}
           <PortalHost onCountChange={setPortalCount} showContent={revealOverlay} />
+          {/* Dialogs must sit above BottomSheet portals or confirms never receive taps. */}
+          <View style={styles.dialogHost} pointerEvents="box-none">
+            {overlay}
+          </View>
         </View>
       </FrostRegistrarContext.Provider>
     </BlurTargetContext.Provider>
@@ -226,6 +229,7 @@ export function useFrostedOverlay(visible: boolean) {
 
 /**
  * Renders children into the root overlay host when `visible`.
+ * Same-window portal (works with containedModal screens).
  */
 export function AppPortal({ visible, children }: { visible: boolean; children: ReactNode }) {
   const idRef = useRef(`portal-${++portalSeq}`);
@@ -266,6 +270,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 10000,
     elevation: 10000,
+  },
+  dialogHost: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 11000,
+    elevation: 11000,
   },
   contentHidden: {
     opacity: 0,

@@ -11,6 +11,7 @@ import {
   Keyboard,
   ScrollView,
   InteractionManager,
+  Linking,
   type KeyboardEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,7 +27,12 @@ import { RTLRow } from '@/components/RTLRow';
 import { useDialog } from '@/context/DialogContext';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, CategoryTints } from '@/constants/theme';
 import { Brand, Radius, TxnKind, txnKindGradientDeep } from '@/constants/theme';
-import { isOtherCategory } from '@/lib/category';
+import {
+  isOtherCategory,
+  hasCategorySubtypes,
+  isKnownSubcategory,
+  getCategorySubtypeConfig,
+} from '@/lib/category';
 import { useAuth } from '@/context/AuthContext';
 import { getCurrency } from '@/constants/currencies';
 import { useGoogleDriveConnect } from '@/lib/googleAuth';
@@ -35,23 +41,21 @@ import { formatAmount, formatTransactionTime } from '@/lib/format';
 import { localeForLanguage, scriptLanguage } from '@/lib/language';
 import { getDailyQuote } from '@/lib/dailyQuotes';
 import { usePageChrome } from '@/hooks/usePageChrome';
+import { BankLogo } from '@/components/BankLogo';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
 const H_PAD = 14;
-/** Equal left/right header slots so title stays true-center (Scan vs back). */
-const HEADER_SIDE = 84;
 const GRID_COLS = 5;
 const GRID_GAP = 6;
 const CAT_SIZE = Math.floor((SCREEN_W - H_PAD * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS);
-/** Scale down below the amount card so the form stays on one screen */
+/** Compact layout so amount + categories + date/pay fit above keypad in one view. */
 const COMPACT = SCREEN_H < 820;
-const KEY_H = COMPACT ? 40 : 44;
-const KEY_GAP = 6;
-const KEYPAD_INSET = 8;
-const ATTACH_H = COMPACT ? 64 : 72;
-/** Amount card stays full-size (never compacted) */
-const AMOUNT_SIZE = 44;
+const KEY_H = COMPACT ? 36 : 40;
+const KEY_GAP = 5;
+const KEYPAD_INSET = 6;
+const ATTACH_H = COMPACT ? 48 : 52;
+const AMOUNT_SIZE = COMPACT ? 36 : 42;
 const QUICK_AMOUNTS = [100, 500, 1000, 5000] as const;
 const NOTE_MAX = 200;
 const SAVINGS_PERCENTS = [10, 20, 30] as const;
@@ -80,10 +84,14 @@ const CATEGORY_COLORS: Record<string, string> = CategoryTints;
 const PAYMENT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   cash: 'wallet',
   bank: 'business',
-  jazzcash: 'phone-portrait',
-  easypaisa: 'phone-portrait',
-  card: 'card',
 };
+
+function normalizePaymentMethod(raw?: string) {
+  if (raw === 'cash' || raw === 'bank') return raw;
+  // JazzCash / EasyPaisa / Card → pick a bank account instead
+  if (raw === 'jazzcash' || raw === 'easypaisa' || raw === 'card') return 'bank';
+  return '';
+}
 
 function firstParam(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -147,7 +155,7 @@ export default function AddTransactionScreen() {
 
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const { showAlert } = useDialog();
+  const { showAlert, showConfirm } = useDialog();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -172,12 +180,20 @@ export default function AddTransactionScreen() {
     return categories[0];
   });
   const [customCategory, setCustomCategory] = useState(firstParam(params.customCategory) || '');
-  const [paymentMethod, setPaymentMethod] = useState<string>(
-    initialPayment && (PAYMENT_METHODS as readonly string[]).includes(initialPayment)
-      ? initialPayment
-      : 'cash'
-  );
+  const [subtypeOther, setSubtypeOther] = useState(() => {
+    const cat = firstParam(params.category) || '';
+    const initial = firstParam(params.customCategory) || '';
+    return hasCategorySubtypes(cat) && !!initial && !isKnownSubcategory(cat, initial);
+  });
+  const [paymentMethod, setPaymentMethod] = useState<string>(() => {
+    const normalized = normalizePaymentMethod(initialPayment);
+    if (normalized) return normalized;
+    return editingId ? 'cash' : '';
+  });
   const [note, setNote] = useState(firstParam(params.note) || '');
+  const [recurringMonthly, setRecurringMonthly] = useState(
+    firstParam(params.recurringMonthly) === '1' || firstParam(params.recurringMonthly) === 'true'
+  );
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [tags] = useState<string[]>(() => parseTagsParam(firstParam(params.tags)));
   const [monthIncome, setMonthIncome] = useState(0);
@@ -192,34 +208,72 @@ export default function AddTransactionScreen() {
   const [loadingEntry, setLoadingEntry] = useState(false);
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const [payOpen, setPayOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
+  const [incomeDestOpen, setIncomeDestOpen] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<Array<{ _id: string; name: string }>>([]);
+  const [bankAccountId, setBankAccountId] = useState(firstParam(params.bankAccount) || '');
 
-  const scanReceipt = useCallback(async () => {
-    const result = await pickReceiptImage('camera');
-    if (!result) {
+  const handleReceiptDenied = useCallback(
+    (reason: 'permission' | 'settings') => {
+      if (reason === 'settings') {
+        showConfirm({
+          title: t('expenses.receipt'),
+          message: t('expenses.photoPermissionSettings'),
+          confirmLabel: t('expenses.openSettings'),
+          cancelLabel: t('common.cancel'),
+          tone: 'warning',
+          onConfirm: () => {
+            void Linking.openSettings();
+          },
+        });
+        return;
+      }
       showAlert({
         title: t('expenses.receipt'),
         message: t('expenses.photoPermission'),
         tone: 'warning',
       });
-      return;
-    }
-    if (result.canceled || !result.assets[0]?.uri) return;
-    setReceipt({ uri: result.assets[0].uri });
-  }, [showAlert, t]);
+    },
+    [showAlert, showConfirm, t]
+  );
 
-  const pickGallery = useCallback(async () => {
-    const result = await pickReceiptImage('library');
-    if (!result) {
-      showAlert({
-        title: t('expenses.receipt'),
-        message: t('expenses.photoPermission'),
-        tone: 'warning',
-      });
-      return;
-    }
-    if (result.canceled || !result.assets[0]?.uri) return;
-    setReceipt({ uri: result.assets[0].uri });
-  }, [showAlert, t]);
+  const scanReceipt = useCallback(() => {
+    showConfirm({
+      title: t('expenses.photoPermissionTitle'),
+      message: t('expenses.photoPermissionCamera'),
+      confirmLabel: t('common.continue'),
+      cancelLabel: t('common.cancel'),
+      tone: 'info',
+      onConfirm: async () => {
+        const result = await pickReceiptImage('camera');
+        if (result.ok) {
+          setReceipt({ uri: result.uri });
+          return;
+        }
+        if (result.reason === 'canceled') return;
+        handleReceiptDenied(result.reason);
+      },
+    });
+  }, [handleReceiptDenied, showConfirm, t]);
+
+  const pickGallery = useCallback(() => {
+    showConfirm({
+      title: t('expenses.photoPermissionTitle'),
+      message: t('expenses.photoPermissionLibrary'),
+      confirmLabel: t('common.continue'),
+      cancelLabel: t('common.cancel'),
+      tone: 'info',
+      onConfirm: async () => {
+        const result = await pickReceiptImage('library');
+        if (result.ok) {
+          setReceipt({ uri: result.uri });
+          return;
+        }
+        if (result.reason === 'canceled') return;
+        handleReceiptDenied(result.reason);
+      },
+    });
+  }, [handleReceiptDenied, showConfirm, t]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -246,9 +300,34 @@ export default function AddTransactionScreen() {
 
   const goBackAfterSave = useCallback(() => {
     InteractionManager.runAfterInteractions(() => {
+      try {
+        if (router.canDismiss()) {
+          router.dismiss();
+          return;
+        }
+      } catch {
+        /* older router */
+      }
       if (router.canGoBack()) router.back();
       else router.replace('/(tabs)/expenses');
     });
+  }, [router]);
+
+  const closeScreen = useCallback(() => {
+    Keyboard.dismiss();
+    try {
+      if (router.canDismiss()) {
+        router.dismiss();
+        return;
+      }
+    } catch {
+      /* older router */
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(tabs)');
   }, [router]);
 
   const titleKey = isEditing
@@ -267,11 +346,6 @@ export default function AddTransactionScreen() {
   const titleParts = title.split(' ');
   const titleHead = titleParts.slice(0, -1).join(' ') || 'Add';
   const titleTail = titleParts[titleParts.length - 1] || title;
-  const titleTagline = isSavings
-    ? t('expenses.savingsNotSpending')
-    : isIncome
-      ? t('expenses.incomeTagline')
-      : t('expenses.simpleTagline');
   const savingsQuote = useMemo(
     () => (isSavings ? getDailyQuote(scriptLanguage(i18n.language)) : null),
     [isSavings, i18n.language]
@@ -310,6 +384,27 @@ export default function AddTransactionScreen() {
   }, [isSavings, i18n.language]);
 
   useEffect(() => {
+    let cancelled = false;
+    api
+      .get('/bank-accounts')
+      .then(({ data }) => {
+        if (!cancelled) setBankAccounts(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setBankAccounts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (paymentMethod !== 'bank') {
+      setBankAccountId('');
+    }
+  }, [paymentMethod]);
+
+  useEffect(() => {
     if (!editingId) return;
     if (firstParam(params.amount)) return;
     let cancelled = false;
@@ -321,9 +416,19 @@ export default function AddTransactionScreen() {
         setAmount(String(data.amount ?? ''));
         if (data.type) setType(resolveType(data.type));
         if (data.category) setCategory(data.category === 'personal' ? 'other' : data.category);
-        setCustomCategory(data.customCategory || '');
-        if (data.paymentMethod) setPaymentMethod(data.paymentMethod);
+        const custom = data.customCategory || '';
+        setCustomCategory(custom);
+        setSubtypeOther(
+          hasCategorySubtypes(data.category) &&
+            !!custom &&
+            !isKnownSubcategory(data.category, custom)
+        );
+        if (data.paymentMethod) setPaymentMethod(normalizePaymentMethod(data.paymentMethod) || 'cash');
+        else setPaymentMethod('cash');
+        if (data.bankAccount) setBankAccountId(String(data.bankAccount));
+        else setBankAccountId('');
         setNote(data.note || '');
+        setRecurringMonthly(Boolean(data.recurringMonthly));
         if (data.date) setTxnDate(new Date(data.date));
         setExistingReceipt(typeof data.receiptImage === 'string' ? data.receiptImage : '');
       } catch {
@@ -339,6 +444,12 @@ export default function AddTransactionScreen() {
       cancelled = true;
     };
   }, [editingId, params.amount, router, showAlert, t]);
+
+  const selectedBankName =
+    bankAccounts.find((a) => a._id === bankAccountId)?.name ||
+    firstParam(params.bankAccountName) ||
+    '';
+  const subtypeConfig = getCategorySubtypeConfig(category);
 
   const displayAmount = amount
     ? formatAmount(Number(amount) || 0, i18n.language)
@@ -399,12 +510,54 @@ export default function AddTransactionScreen() {
       showAlert({ title: t('common.error'), message: t('expenses.invalidAmount'), tone: 'error' });
       return;
     }
+    if (!txnDate || Number.isNaN(txnDate.getTime())) {
+      showAlert({
+        title: t('common.error'),
+        message: t('expenses.dateTimeRequired'),
+        tone: 'warning',
+      });
+      setPickerMode('date');
+      return;
+    }
     if (!isSavings && isOtherCategory(category) && !customCategory.trim()) {
       showAlert({
         title: t('common.error'),
         message: t('expenses.customCategoryRequired'),
         tone: 'error',
       });
+      return;
+    }
+    if (!isSavings && hasCategorySubtypes(category)) {
+      const config = getCategorySubtypeConfig(category)!;
+      if (subtypeOther ? !customCategory.trim() : !isKnownSubcategory(category, customCategory)) {
+        showAlert({
+          title: t('common.error'),
+          message: t(config.requiredKey),
+          tone: 'warning',
+        });
+        return;
+      }
+    }
+    if (!paymentMethod || !(PAYMENT_METHODS as readonly string[]).includes(paymentMethod)) {
+      showAlert({
+        title: t('common.error'),
+        message: isIncome ? t('expenses.toRequired') : t('expenses.payRequired'),
+        tone: 'warning',
+      });
+      if (isIncome) setIncomeDestOpen(true);
+      else setPayOpen(true);
+      return;
+    }
+    if (paymentMethod === 'bank' && !bankAccountId) {
+      showAlert({
+        title: t('banks.title'),
+        message: bankAccounts.length ? t('banks.selectRequired') : t('banks.addFirst'),
+        tone: 'warning',
+      });
+      if (bankAccounts.length) {
+        if (isIncome) setIncomeDestOpen(true);
+        else setBankOpen(true);
+      }
       return;
     }
     Keyboard.dismiss();
@@ -428,11 +581,17 @@ export default function AddTransactionScreen() {
         type,
         amount: Number(amount),
         category: isSavings ? 'savings' : category,
-        customCategory: isSavings ? '' : isOtherCategory(category) ? customCategory.trim() : '',
-        paymentMethod: isIncome ? undefined : paymentMethod,
+        customCategory: isSavings
+          ? ''
+          : isOtherCategory(category) || hasCategorySubtypes(category)
+            ? customCategory.trim()
+            : '',
+        paymentMethod,
+        bankAccount: paymentMethod === 'bank' ? bankAccountId : null,
         note: note.slice(0, NOTE_MAX),
         tags,
         date: txnDate.toISOString(),
+        recurringMonthly: isSavings ? false : recurringMonthly,
         ...(receiptImage ? { receiptImage } : {}),
       };
       if (isEditing) {
@@ -445,13 +604,24 @@ export default function AddTransactionScreen() {
       }
       goBackAfterSave();
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('expenses.saveFailed');
+      const apiMessage =
+        (err as { response?: { data?: { message?: string }; status?: number } })?.response?.data
+          ?.message || '';
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const raw = err instanceof Error ? err.message : '';
+      let message = t('expenses.saveFailed');
+      if (apiMessage) {
+        message = apiMessage;
+      } else if (status === 401) {
+        message = t('auth.sessionExpired', { defaultValue: 'Please sign in again.' });
+      } else if (raw.includes('Drive') || raw.includes('Google') || apiMessage.includes('Drive')) {
+        message = t('expenses.receiptUploadFailed');
+      } else if (raw.includes('Network') || raw.includes('timeout')) {
+        message = t('common.networkError', { defaultValue: 'Network error. Check your connection.' });
+      }
       showAlert({
         title: t('common.error'),
-        message:
-          message.includes('Drive') || message.includes('Google')
-            ? t('expenses.receiptUploadFailed')
-            : t('expenses.saveFailed'),
+        message,
         tone: 'error',
       });
       setLoading(false);
@@ -466,11 +636,42 @@ export default function AddTransactionScreen() {
         ? t('expenses.saveIncome')
         : t('expenses.saveExpense');
 
+  const deleteEntry = () => {
+    if (!editingId) return;
+    const kindLabel = isSavings
+      ? t('expenses.savings')
+      : isIncome
+        ? t('expenses.income')
+        : t('expenses.expense');
+    showConfirm({
+      title: t('expenses.deleteTitle'),
+      message: t('expenses.deleteConfirm', { kind: kindLabel }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
+      tone: 'error',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          await api.delete(`/transactions/${editingId}`);
+          goBackAfterSave();
+        } catch {
+          setLoading(false);
+          showAlert({
+            title: t('common.error'),
+            message: t('expenses.deleteFailed'),
+            tone: 'error',
+          });
+        }
+      },
+    });
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
-      {/* In-screen header — title absolute-centered on screen */}
-      <View style={{ paddingTop: Math.max(insets.top, 8) }}>
-        <View style={styles.topBar}>
+      {/* Clears Dynamic Island / status bar on full-screen slide presentation. */}
+      <View style={{ paddingTop: insets.top + 6 }}>
+        <View style={[styles.topBar, styles.topBarCompact]}>
           <View style={styles.topCenter} pointerEvents="none">
             <View style={styles.headerTitleRow}>
               <AppText variant="h3" color={text} shrink>
@@ -480,44 +681,23 @@ export default function AddTransactionScreen() {
                 {titleTail}
               </AppText>
             </View>
-            <AppText variant="caption" color={muted} numberOfLines={1} align="center" style={styles.headerSubtitle}>
-              {titleTagline}
-            </AppText>
-          </View>
-          <View style={styles.topSide}>
-            <Pressable
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
-              hitSlop={10}
-              style={styles.headerBackBtn}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.back')}>
-              <Ionicons name="chevron-back" size={24} color={text} />
-            </Pressable>
-          </View>
-          <View style={[styles.topSide, styles.topSideEnd]}>
-            {!isSavings ? (
-              <Pressable
-                onPress={scanReceipt}
-                hitSlop={8}
-                style={[styles.scanChip, { borderColor: `${accent}66`, backgroundColor: well }]}>
-                <Ionicons name="document-text-outline" size={15} color={accent} />
-                <AppText variant="captionBold" color={accent} shrink>
-                  {t('expenses.scanShort')}
-                </AppText>
-              </Pressable>
-            ) : null}
           </View>
         </View>
       </View>
 
-      <View style={styles.content}>
-        <ScrollView
-          style={styles.formScroll}
-          contentContainerStyle={styles.formScrollContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          showsVerticalScrollIndicator={false}
-          bounces={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={[
+          styles.contentInner,
+          {
+            paddingBottom: keyboardOpen ? 8 : Math.max(insets.bottom, 16),
+            marginBottom: keyboardOpen ? keyboardHeight : 0,
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
+        bounces={false}>
         {/* Amount — compact strip while typing a note */}
         {!keyboardOpen ? (
         <LinearGradient
@@ -603,110 +783,252 @@ export default function AddTransactionScreen() {
 
         {/* Categories — filled tiles */}
         {!isSavings && !keyboardOpen ? (
-          <View style={styles.catGrid}>
-            {categories.map((cat) => {
-              const selected = category === cat;
-              const color = CATEGORY_COLORS[cat] || accent;
-              return (
+          <View style={styles.catBlock}>
+            <View style={styles.catGrid}>
+              {categories.map((cat) => {
+                const selected = category === cat;
+                const color = CATEGORY_COLORS[cat] || accent;
+                return (
+                  <Pressable
+                    key={cat}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setCategory(cat);
+                      setSubtypeOther(false);
+                      setCustomCategory('');
+                    }}
+                    style={[
+                      styles.catCell,
+                      {
+                        width: CAT_SIZE,
+                        borderColor: selected ? accent : 'transparent',
+                        backgroundColor: selected ? `${accent}18` : field,
+                      },
+                    ]}>
+                    {selected ? (
+                      <View style={[styles.checkBadge, { backgroundColor: accent }]}>
+                        <Ionicons name="checkmark" size={8} color={onBrand} />
+                      </View>
+                    ) : null}
+                    <View style={[styles.catIcon, { backgroundColor: `${color}28` }]}>
+                      <Ionicons name={CATEGORY_ICONS[cat] || 'ellipse'} size={14} color={color} />
+                    </View>
+                    <AppText
+                      variant="captionBold"
+                      color={text}
+                      align="center"
+                      numberOfLines={1}
+                      style={styles.catLabel}>
+                      {t(`categoriesShort.${cat}`, { defaultValue: t(`categories.${cat}`) })}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {subtypeConfig ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.billChipRow}
+                keyboardShouldPersistTaps="handled">
+                {subtypeConfig.options.map((sub) => {
+                  const selected = !subtypeOther && customCategory === sub;
+                  return (
+                    <Pressable
+                      key={sub}
+                      onPress={() => {
+                        setSubtypeOther(false);
+                        setCustomCategory(sub);
+                      }}
+                      style={[
+                        styles.billChip,
+                        {
+                          borderColor: selected ? accent : border,
+                          backgroundColor: selected ? `${accent}18` : field,
+                        },
+                      ]}>
+                      <AppText
+                        variant="captionBold"
+                        color={selected ? accent : soft}
+                        numberOfLines={1}
+                        style={styles.billChipText}>
+                        {t(`${subtypeConfig.i18nKey}.${sub}`)}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
                 <Pressable
-                  key={cat}
                   onPress={() => {
-                    Keyboard.dismiss();
-                    setCategory(cat);
-                    if (!isOtherCategory(cat)) setCustomCategory('');
+                    setSubtypeOther(true);
+                    if (isKnownSubcategory(category, customCategory)) setCustomCategory('');
                   }}
                   style={[
-                    styles.catCell,
+                    styles.billChip,
                     {
-                      width: CAT_SIZE,
-                      borderColor: selected ? accent : 'transparent',
-                      backgroundColor: selected ? `${accent}18` : field,
+                      borderColor: subtypeOther ? accent : border,
+                      backgroundColor: subtypeOther ? `${accent}18` : field,
                     },
                   ]}>
-                  {selected ? (
-                    <View style={[styles.checkBadge, { backgroundColor: accent }]}>
-                      <Ionicons name="checkmark" size={9} color={onBrand} />
-                    </View>
-                  ) : null}
-                  <View style={[styles.catIcon, { backgroundColor: `${color}28` }]}>
-                    <Ionicons name={CATEGORY_ICONS[cat] || 'ellipse'} size={16} color={color} />
-                  </View>
                   <AppText
                     variant="captionBold"
-                    color={selected ? text : muted}
-                    align="center"
+                    color={subtypeOther ? accent : soft}
                     numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.7}
-                    style={styles.catLabel}>
-                    {t(`categoriesShort.${cat}`, { defaultValue: t(`categories.${cat}`) })}
+                    style={styles.billChipText}>
+                    {t(`${subtypeConfig.i18nKey}.other`)}
                   </AppText>
                 </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
+              </ScrollView>
+            ) : null}
 
-        {!isSavings && isOtherCategory(category) && !keyboardOpen ? (
-          <TextInput
-            style={[styles.customInput, { borderColor: border, backgroundColor: field, color: text }]}
-            value={customCategory}
-            onChangeText={setCustomCategory}
-            placeholder={t('expenses.customCategoryPlaceholder')}
-            placeholderTextColor={muted}
-          />
+            {subtypeConfig && subtypeOther ? (
+              <TextInput
+                style={[styles.customInput, { borderColor: border, backgroundColor: field, color: text }]}
+                value={customCategory}
+                onChangeText={setCustomCategory}
+                placeholder={t(subtypeConfig.otherPlaceholderKey)}
+                placeholderTextColor={muted}
+              />
+            ) : null}
+
+            {isOtherCategory(category) ? (
+              <TextInput
+                style={[styles.customInput, { borderColor: border, backgroundColor: field, color: text }]}
+                value={customCategory}
+                onChangeText={setCustomCategory}
+                placeholder={t('expenses.customCategoryPlaceholder')}
+                placeholderTextColor={muted}
+              />
+            ) : null}
+          </View>
         ) : null}
 
         {/* Date / Time / Payment — outlined pills on strip */}
         {!keyboardOpen ? (
         <View style={[styles.metaStrip, { backgroundColor: card, borderColor: border }]}>
-          <RTLRow style={styles.metaRow} gap={6}>
-            <Pressable onPress={() => setPickerMode('date')} style={[styles.metaChip, { borderColor: border }]}>
+          <RTLRow style={styles.metaRow} gap={4}>
+            <Pressable
+              onPress={() => setPickerMode('date')}
+              style={[styles.metaChip, { borderColor: border }]}>
               <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22` }]}>
-                <Ionicons name="calendar-outline" size={13} color={accent} />
+                <Ionicons name="calendar-outline" size={11} color={accent} />
               </View>
               <View style={styles.metaCopy}>
                 <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
-                  {t('expenses.date')}
+                  {t('expenses.date')} *
                 </AppText>
-                <AppText variant="captionBold" color={text} numberOfLines={1}>
+                <AppText variant="captionBold" color={text} numberOfLines={1} style={styles.metaValue}>
                   {dateLabel}
                 </AppText>
               </View>
             </Pressable>
-            <Pressable onPress={() => setPickerMode('time')} style={[styles.metaChip, { borderColor: border }]}>
+            <Pressable
+              onPress={() => setPickerMode('time')}
+              style={[styles.metaChip, { borderColor: border }]}>
               <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22` }]}>
-                <Ionicons name="time-outline" size={13} color={accent} />
+                <Ionicons name="time-outline" size={11} color={accent} />
               </View>
               <View style={styles.metaCopy}>
                 <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
-                  {t('expenses.time')}
+                  {t('expenses.time')} *
                 </AppText>
-                <AppText variant="captionBold" color={text} numberOfLines={1}>
+                <AppText variant="captionBold" color={text} numberOfLines={1} style={styles.metaValue}>
                   {timeLabel}
                 </AppText>
               </View>
             </Pressable>
-            {!isIncome ? (
-              <Pressable onPress={() => setPayOpen(true)} style={[styles.metaChip, { borderColor: border }]}>
-                <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22` }]}>
-                  <Ionicons name={PAYMENT_ICONS[paymentMethod] || 'wallet'} size={13} color={accent} />
+            {isIncome ? (
+              <Pressable
+                onPress={() => setIncomeDestOpen(true)}
+                style={[
+                  styles.metaChip,
+                  { borderColor: paymentMethod ? border : accent },
+                ]}>
+                <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22`, overflow: 'hidden' }]}>
+                  {paymentMethod === 'bank' && selectedBankName ? (
+                    <BankLogo name={selectedBankName} size={18} />
+                  ) : paymentMethod === 'cash' ? (
+                    <Ionicons name="wallet" size={11} color={accent} />
+                  ) : (
+                    <Ionicons name="ellipse-outline" size={11} color={accent} />
+                  )}
                 </View>
                 <View style={styles.metaCopy}>
                   <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
-                    {isSavings ? t('expenses.fromShort') : t('expenses.payShort')}
+                    {t('expenses.toShort')} *
                   </AppText>
-                  <AppText variant="captionBold" color={text} numberOfLines={1}>
-                    {t(`paymentMethods.${paymentMethod}`)}
+                  <AppText variant="captionBold" color={text} numberOfLines={1} style={styles.metaValue}>
+                    {paymentMethod === 'bank'
+                      ? selectedBankName || t('banks.selectShort')
+                      : paymentMethod === 'cash'
+                        ? t('paymentMethods.cash')
+                        : t('expenses.selectRequired')}
                   </AppText>
                 </View>
               </Pressable>
-            ) : null}
+            ) : (
+              <>
+                <Pressable
+                  onPress={() => setPayOpen(true)}
+                  style={[
+                    styles.metaChip,
+                    { borderColor: paymentMethod ? border : accent },
+                  ]}>
+                  <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22` }]}>
+                    <Ionicons name={PAYMENT_ICONS[paymentMethod] || 'wallet'} size={11} color={accent} />
+                  </View>
+                  <View style={styles.metaCopy}>
+                    <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
+                      {isSavings ? t('expenses.fromShort') : t('expenses.payShort')} *
+                    </AppText>
+                    <AppText variant="captionBold" color={text} numberOfLines={1} style={styles.metaValue}>
+                      {paymentMethod
+                        ? t(`paymentMethods.${paymentMethod}`)
+                        : t('expenses.selectRequired')}
+                    </AppText>
+                  </View>
+                </Pressable>
+                {paymentMethod === 'bank' ? (
+                  <Pressable
+                    onPress={() => {
+                      if (!bankAccounts.length) {
+                        showAlert({
+                          title: t('banks.title'),
+                          message: t('banks.addFirst'),
+                          tone: 'warning',
+                        });
+                        return;
+                      }
+                      setBankOpen(true);
+                    }}
+                    style={[
+                      styles.metaChip,
+                      { borderColor: selectedBankName ? border : accent },
+                    ]}>
+                    <View style={[styles.metaIconWrap, { backgroundColor: `${accent}22`, overflow: 'hidden' }]}>
+                      {selectedBankName ? (
+                        <BankLogo name={selectedBankName} size={18} />
+                      ) : (
+                        <Ionicons name="business-outline" size={11} color={accent} />
+                      )}
+                    </View>
+                    <View style={styles.metaCopy}>
+                      <AppText variant="caption" color={muted} numberOfLines={1} style={styles.metaHint}>
+                        {t('banks.account')} *
+                      </AppText>
+                      <AppText variant="captionBold" color={text} numberOfLines={1} style={styles.metaValue}>
+                        {selectedBankName || t('banks.selectShort')}
+                      </AppText>
+                    </View>
+                  </Pressable>
+                ) : null}
+              </>
+            )}
           </RTLRow>
         </View>
         ) : null}
 
-        {/* Daily savings quote fills leftover space */}
+        {/* Savings tip — compact, no flex fill */}
         {isSavings && savingsQuote && !keyboardOpen ? (
           <View style={styles.quoteArea}>
             <LinearGradient
@@ -725,7 +1047,7 @@ export default function AddTransactionScreen() {
                 color="rgba(255,255,255,0.9)"
                 align="center"
                 style={styles.quoteText}
-                numberOfLines={4}>
+                numberOfLines={3}>
                 “{savingsQuote.text}”
               </AppText>
               {savingsQuote.source ? (
@@ -735,123 +1057,160 @@ export default function AddTransactionScreen() {
               ) : null}
             </LinearGradient>
           </View>
-        ) : !keyboardOpen ? (
-          <View style={styles.flexSpacer} />
-        ) : (
-          <View style={styles.flexSpacer} />
-        )}
-        </ScrollView>
+        ) : null}
 
-        {/* Sticky composer: note + keypad + save — lifts with real keyboard height */}
-        <View
-          style={[
-            styles.composer,
-            {
-              backgroundColor: bg,
-              paddingBottom: keyboardOpen ? 10 : Math.max(insets.bottom, 8),
-              marginBottom: keyboardOpen ? keyboardHeight : 0,
-            },
-          ]}>
-          {!isSavings ? (
-            <RTLRow style={styles.attachRow} gap={8}>
-              {receipt?.uri ? (
-                <View style={[styles.photoPreview, { borderColor: border }]}>
-                  <Image source={{ uri: receipt.uri }} style={styles.photoImg} />
-                  <Pressable onPress={() => setReceipt(null)} style={styles.photoRemove}>
-                    <Ionicons name="close" size={11} color={onBrand} />
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={pickGallery}
-                  onLongPress={scanReceipt}
-                  style={[styles.addPhoto, { borderColor: `${accent}55`, backgroundColor: well }]}>
-                  <Ionicons name="camera-outline" size={20} color={accent} />
+        {!isSavings ? (
+          <RTLRow style={styles.attachRow} gap={8}>
+            {receipt?.uri ? (
+              <View style={[styles.photoPreview, { borderColor: border }]}>
+                <Image source={{ uri: receipt.uri }} style={styles.photoImg} />
+                <Pressable onPress={() => setReceipt(null)} style={styles.photoRemove}>
+                  <Ionicons name="close" size={11} color={onBrand} />
                 </Pressable>
-              )}
-              <View style={[styles.noteBox, { borderBottomColor: border, backgroundColor: field }]}>
-                <TextInput
-                  style={[styles.noteInput, { color: text }]}
-                  value={note}
-                  onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
-                  placeholder={t('expenses.noteShort')}
-                  placeholderTextColor={muted}
-                  multiline
-                  maxLength={NOTE_MAX}
-                  blurOnSubmit
-                  returnKeyType="done"
-                />
               </View>
-            </RTLRow>
-          ) : (
-            <View style={[styles.noteBox, styles.savingsNote, { borderBottomColor: border, backgroundColor: field }]}>
-              <Ionicons name="bookmark-outline" size={16} color={accent} style={styles.savingsNoteIcon} />
+            ) : (
+              <Pressable
+                onPress={pickGallery}
+                onLongPress={scanReceipt}
+                style={[styles.addPhoto, { borderColor: `${accent}55`, backgroundColor: well }]}>
+                <Ionicons name="camera-outline" size={18} color={accent} />
+              </Pressable>
+            )}
+            <View style={[styles.noteBox, { borderBottomColor: border, backgroundColor: field }]}>
               <TextInput
                 style={[styles.noteInput, { color: text }]}
                 value={note}
                 onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
-                placeholder={t('expenses.savingsNotePlaceholder')}
+                placeholder={t('expenses.noteShort')}
                 placeholderTextColor={muted}
+                multiline
                 maxLength={NOTE_MAX}
-                returnKeyType="done"
                 blurOnSubmit
+                returnKeyType="done"
               />
             </View>
-          )}
+          </RTLRow>
+        ) : (
+          <View style={[styles.noteBox, styles.savingsNote, { borderBottomColor: border, backgroundColor: field }]}>
+            <Ionicons name="bookmark-outline" size={14} color={accent} style={styles.savingsNoteIcon} />
+            <TextInput
+              style={[styles.noteInput, { color: text }]}
+              value={note}
+              onChangeText={(v) => setNote(v.slice(0, NOTE_MAX))}
+              placeholder={t('expenses.savingsNotePlaceholder')}
+              placeholderTextColor={muted}
+              maxLength={NOTE_MAX}
+              returnKeyType="done"
+              blurOnSubmit
+            />
+          </View>
+        )}
 
-          {!keyboardOpen ? (
-            <View style={[styles.keypadTray, { backgroundColor: card, borderColor: border }]}>
-              {(
-                [
-                  ['1', '2', '3'],
-                  ['4', '5', '6'],
-                  ['7', '8', '9'],
-                  ['.', '0', 'back'],
-                ] as const
-              ).map((row) => (
-                <View key={row.join('-')} style={styles.keyRow}>
-                  {row.map((key) => (
-                    <Pressable
-                      key={key}
-                      onPress={() => onKey(key)}
-                      style={({ pressed }) => [
-                        styles.key,
-                        { backgroundColor: field },
-                        pressed && { backgroundColor: well },
-                      ]}>
-                      {key === 'back' ? (
-                        <Ionicons name="backspace-outline" size={20} color={soft} />
-                      ) : (
-                        <AppText variant="h3" color={text} style={styles.keyText}>
-                          {key}
-                        </AppText>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              ))}
+        {!isSavings ? (
+          <Pressable
+            onPress={() => setRecurringMonthly((v) => !v)}
+            style={[styles.recurringRow, { borderColor: border, backgroundColor: field }]}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: recurringMonthly }}>
+            <View style={[styles.recurringCheck, { borderColor: accent, backgroundColor: recurringMonthly ? accent : 'transparent' }]}>
+              {recurringMonthly ? <Ionicons name="checkmark" size={14} color={onBrand} /> : null}
             </View>
-          ) : null}
+            <View style={{ flex: 1 }}>
+              <AppText variant="bodySemibold" color={text}>
+                {t('expenses.repeatMonthly')}
+              </AppText>
+              <AppText variant="caption" color={muted}>
+                {t('expenses.repeatMonthlyHint')}
+              </AppText>
+            </View>
+          </Pressable>
+        ) : null}
 
+        {!keyboardOpen ? (
+          <View style={[styles.keypadTray, { backgroundColor: card, borderColor: border }]}>
+            {(
+              [
+                ['1', '2', '3'],
+                ['4', '5', '6'],
+                ['7', '8', '9'],
+                ['.', '0', 'back'],
+              ] as const
+            ).map((row) => (
+              <View key={row.join('-')} style={styles.keyRow}>
+                {row.map((key) => (
+                  <Pressable
+                    key={key}
+                    onPress={() => onKey(key)}
+                    style={({ pressed }) => [
+                      styles.key,
+                      { backgroundColor: field },
+                      pressed && { backgroundColor: well },
+                    ]}>
+                    {key === 'back' ? (
+                      <Ionicons name="backspace-outline" size={18} color={soft} />
+                    ) : (
+                      <AppText variant="h3" color={text} style={styles.keyText}>
+                        {key}
+                      </AppText>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.footerActions}>
+          <Pressable
+            onPress={closeScreen}
+            disabled={loading || loadingEntry}
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              { borderColor: border, backgroundColor: field, opacity: pressed ? 0.88 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.cancel')}>
+            <AppText variant="button" color={text}>
+              {t('common.cancel')}
+            </AppText>
+          </Pressable>
           <Pressable
             onPress={save}
             disabled={loading || loadingEntry}
-            style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
+            style={({ pressed }) => [{ flex: 1.4, opacity: pressed ? 0.9 : 1 }]}>
             <LinearGradient
               colors={[...gradient]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[styles.saveBtn, (loading || loadingEntry) && { opacity: 0.65 }]}>
-              <RTLRow gap={8} style={{ justifyContent: 'center' }}>
-                <Ionicons name="checkmark-circle" size={18} color={onBrand} />
-                <AppText variant="button" color={onBrand}>
+              <RTLRow gap={6} style={{ justifyContent: 'center' }}>
+                <Ionicons name="checkmark-circle" size={16} color={onBrand} />
+                <AppText variant="button" color={onBrand} style={styles.saveBtnLabel}>
                   {saveLabel}
                 </AppText>
               </RTLRow>
             </LinearGradient>
           </Pressable>
         </View>
-      </View>
+        {isEditing ? (
+          <Pressable
+            onPress={deleteEntry}
+            disabled={loading || loadingEntry}
+            style={({ pressed }) => [
+              styles.deleteBtn,
+              { borderColor: Brand.danger },
+              pressed && { opacity: 0.85 },
+              (loading || loadingEntry) && { opacity: 0.5 },
+            ]}>
+            <RTLRow gap={8} style={{ justifyContent: 'center' }}>
+              <Ionicons name="trash-outline" size={18} color={Brand.danger} />
+              <AppText variant="button" color={Brand.danger}>
+                {t('common.delete')}
+              </AppText>
+            </RTLRow>
+          </Pressable>
+        ) : null}
+      </ScrollView>
 
       {/* Date / time picker */}
       {pickerMode && Platform.OS === 'ios' ? (
@@ -893,9 +1252,18 @@ export default function AddTransactionScreen() {
       <Modal transparent animationType="fade" visible={payOpen} onRequestClose={() => setPayOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setPayOpen(false)} />
         <View style={[styles.paySheet, { backgroundColor: card, borderColor: border, paddingBottom: insets.bottom + 16 }]}>
-          <AppText variant="bodySemibold" color={text} style={{ marginBottom: 12 }}>
-            {t('expenses.paymentMethod')}
-          </AppText>
+          <RTLRow style={styles.sheetHeader} gap={8}>
+            <AppText variant="bodySemibold" color={text} style={{ flex: 1 }}>
+              {t('expenses.paymentMethod')}
+            </AppText>
+            <Pressable
+              onPress={() => setPayOpen(false)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel')}>
+              <Ionicons name="close" size={22} color={muted} />
+            </Pressable>
+          </RTLRow>
           {PAYMENT_METHODS.map((method) => {
             const selected = paymentMethod === method;
             return (
@@ -904,6 +1272,17 @@ export default function AddTransactionScreen() {
                 onPress={() => {
                   setPaymentMethod(method);
                   setPayOpen(false);
+                  if (method === 'bank') {
+                    if (!bankAccounts.length) {
+                      showAlert({
+                        title: t('banks.title'),
+                        message: t('banks.addFirst'),
+                        tone: 'warning',
+                      });
+                      return;
+                    }
+                    setBankOpen(true);
+                  }
                 }}
                 style={[
                   styles.payRow,
@@ -920,6 +1299,117 @@ export default function AddTransactionScreen() {
           })}
         </View>
       </Modal>
+
+      <Modal transparent animationType="fade" visible={bankOpen} onRequestClose={() => setBankOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setBankOpen(false)} />
+        <View style={[styles.paySheet, { backgroundColor: card, borderColor: border, paddingBottom: insets.bottom + 16 }]}>
+          <RTLRow style={styles.sheetHeader} gap={8}>
+            <AppText variant="bodySemibold" color={text} style={{ flex: 1 }}>
+              {t('banks.select')}
+            </AppText>
+            <Pressable
+              onPress={() => setBankOpen(false)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel')}>
+              <Ionicons name="close" size={22} color={muted} />
+            </Pressable>
+          </RTLRow>
+          {bankAccounts.map((account) => {
+            const selected = bankAccountId === account._id;
+            return (
+              <Pressable
+                key={account._id}
+                onPress={() => {
+                  setBankAccountId(account._id);
+                  setBankOpen(false);
+                }}
+                style={[
+                  styles.payRow,
+                  { borderColor: border },
+                  selected && { borderColor: accent, backgroundColor: `${accent}14` },
+                ]}>
+                <BankLogo name={account.name} size={28} />
+                <AppText variant="bodySemibold" color={selected ? text : muted} style={{ flex: 1 }}>
+                  {account.name}
+                </AppText>
+                {selected ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={incomeDestOpen}
+        onRequestClose={() => setIncomeDestOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setIncomeDestOpen(false)} />
+        <View style={[styles.paySheet, { backgroundColor: card, borderColor: border, paddingBottom: insets.bottom + 16 }]}>
+          <RTLRow style={styles.sheetHeader} gap={8}>
+            <AppText variant="bodySemibold" color={text} style={{ flex: 1 }}>
+              {t('expenses.receivedIn')}
+            </AppText>
+            <Pressable
+              onPress={() => setIncomeDestOpen(false)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel')}>
+              <Ionicons name="close" size={22} color={muted} />
+            </Pressable>
+          </RTLRow>
+          <Pressable
+            onPress={() => {
+              setPaymentMethod('cash');
+              setBankAccountId('');
+              setIncomeDestOpen(false);
+            }}
+            style={[
+              styles.payRow,
+              { borderColor: border },
+              paymentMethod === 'cash' && { borderColor: accent, backgroundColor: `${accent}14` },
+            ]}>
+            <BankLogo name="Cash" size={28} cash />
+            <AppText
+              variant="bodySemibold"
+              color={paymentMethod === 'cash' ? text : muted}
+              style={{ flex: 1 }}>
+              {t('paymentMethods.cash')}
+            </AppText>
+            {paymentMethod === 'cash' ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
+          </Pressable>
+          {bankAccounts.length === 0 ? (
+            <AppText variant="caption" color={muted} style={{ marginTop: 4, marginBottom: 8 }}>
+              {t('banks.addFirst')}
+            </AppText>
+          ) : (
+            bankAccounts.map((account) => {
+              const selected = paymentMethod === 'bank' && bankAccountId === account._id;
+              return (
+                <Pressable
+                  key={account._id}
+                  onPress={() => {
+                    setPaymentMethod('bank');
+                    setBankAccountId(account._id);
+                    setIncomeDestOpen(false);
+                  }}
+                  style={[
+                    styles.payRow,
+                    { borderColor: border },
+                    selected && { borderColor: accent, backgroundColor: `${accent}14` },
+                  ]}>
+                  <BankLogo name={account.name} size={28} />
+                  <AppText variant="bodySemibold" color={selected ? text : muted} style={{ flex: 1 }}>
+                    {account.name}
+                  </AppText>
+                  {selected ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
+                </Pressable>
+              );
+            })
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -930,19 +1420,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingBottom: 6,
-    minHeight: 56,
+    paddingHorizontal: 14,
+    paddingBottom: 4,
+    minHeight: 44,
     position: 'relative',
     zIndex: 2,
   },
-  topSide: {
-    width: HEADER_SIDE,
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  topSideEnd: {
-    alignItems: 'flex-end',
+  topBarCompact: {
+    minHeight: 40,
+    paddingBottom: 2,
   },
   topCenter: {
     position: 'absolute',
@@ -952,25 +1438,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: HEADER_SIDE,
+    paddingHorizontal: H_PAD,
     zIndex: 1,
   },
   content: {
     flex: 1,
     paddingHorizontal: H_PAD,
-    paddingTop: 4,
   },
-  formScroll: {
-    flex: 1,
-  },
-  formScrollContent: {
+  contentInner: {
     flexGrow: 1,
-    gap: COMPACT ? 8 : 10,
-    paddingBottom: 4,
-  },
-  composer: {
-    gap: COMPACT ? 8 : 10,
-    paddingTop: 4,
+    justifyContent: 'space-evenly',
+    paddingTop: 2,
   },
   amountMini: {
     borderWidth: 1,
@@ -990,29 +1468,14 @@ const styles = StyleSheet.create({
     width: '100%',
     textAlign: 'center',
   },
-  headerBackBtn: {
-    height: 40,
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scanChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-  },
   amountCard: {
     borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 14,
-    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    marginBottom: 0,
+    minHeight: COMPACT ? 108 : 120,
     overflow: 'hidden',
     shadowOpacity: 0.35,
     shadowRadius: 14,
@@ -1021,25 +1484,25 @@ const styles = StyleSheet.create({
   },
   amountGlow: {
     position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    top: -55,
-    right: -35,
+    top: -60,
+    right: -40,
   },
   amountTop: {
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
-    minHeight: 52,
+    marginBottom: 8,
+    minHeight: 44,
   },
   currencyChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
@@ -1052,12 +1515,12 @@ const styles = StyleSheet.create({
     minHeight: AMOUNT_SIZE + 4,
   },
   currencySym: {
-    marginTop: 6,
-    fontSize: 20,
+    marginTop: 4,
+    fontSize: 18,
   },
   amountValue: {
     fontSize: AMOUNT_SIZE,
-    lineHeight: AMOUNT_SIZE + 8,
+    lineHeight: AMOUNT_SIZE + 6,
     fontWeight: '700',
     letterSpacing: -1,
     maxWidth: '72%',
@@ -1070,19 +1533,19 @@ const styles = StyleSheet.create({
   },
   quickRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   quickPill: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 7,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.22)',
   },
   quickPillText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   quickPillDisabled: {
@@ -1098,46 +1561,64 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    height: 52,
+    marginBottom: 8,
+    height: ATTACH_H,
   },
   savingsNoteIcon: {
     marginRight: 8,
+  },
+  catBlock: {
+    gap: 8,
   },
   catGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: GRID_GAP,
-    marginBottom: 10,
+    marginBottom: 0,
   },
   catCell: {
     borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 6,
+    borderRadius: 12,
+    paddingVertical: 5,
     paddingHorizontal: 2,
     alignItems: 'center',
     position: 'relative',
   },
   checkBadge: {
     position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    top: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
   },
   catIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 3,
+    marginBottom: 2,
   },
-  catLabel: { fontSize: 9, width: '100%' },
+  catLabel: { fontSize: 11, lineHeight: 13, width: '100%', fontWeight: '700' },
+  billChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  billChip: {
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  billChipText: {
+    fontSize: 12,
+  },
   customInput: {
     borderWidth: 1,
     borderRadius: Radius.md,
@@ -1150,7 +1631,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     padding: 6,
-    marginBottom: 10,
+    marginBottom: 0,
   },
   metaRow: {
     alignItems: 'stretch',
@@ -1160,17 +1641,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: 'transparent',
     borderRadius: Radius.full,
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
+    paddingHorizontal: 5,
+    paddingVertical: 6,
   },
   metaIconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1178,9 +1659,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  metaHint: { fontSize: 9, marginBottom: 1 },
+  metaHint: { fontSize: 8, lineHeight: 10, marginBottom: 0 },
+  metaValue: { fontSize: 10, lineHeight: 12 },
   attachRow: {
-    marginBottom: 10,
+    marginBottom: 0,
     alignItems: 'stretch',
   },
   addPhoto: {
@@ -1227,20 +1709,34 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     padding: 0,
   },
+  recurringRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 2,
+  },
+  recurringCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   flexSpacer: {
-    flex: 1,
-    minHeight: 4,
+    height: 0,
   },
   quoteArea: {
-    flex: 1,
-    minHeight: 72,
-    justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   quoteCard: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(251,191,36,0.22)',
@@ -1271,10 +1767,10 @@ const styles = StyleSheet.create({
   keypadTray: {
     flexGrow: 0,
     flexShrink: 0,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     padding: KEYPAD_INSET,
-    marginBottom: 8,
+    marginBottom: 0,
     gap: KEY_GAP,
   },
   keyRow: {
@@ -1284,17 +1780,46 @@ const styles = StyleSheet.create({
   key: {
     flex: 1,
     height: KEY_H,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   keyText: {
-    fontSize: 22,
+    fontSize: 18,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  cancelBtn: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   saveBtn: {
     borderRadius: 14,
-    paddingVertical: 13,
-    marginBottom: 2,
+    paddingVertical: 10,
+    marginBottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  saveBtnLabel: {
+    fontSize: 15,
+  },
+  deleteBtn: {
+    borderRadius: 14,
+    paddingVertical: 11,
+    marginTop: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFill,
@@ -1317,6 +1842,10 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
+  },
+  sheetHeader: {
+    alignItems: 'center',
+    marginBottom: 12,
   },
   payRow: {
     flexDirection: 'row',
