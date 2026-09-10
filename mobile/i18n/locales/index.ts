@@ -1,129 +1,99 @@
-import af from './af.json';
-import am from './am.json';
-import ar from './ar.json';
-import az from './az.json';
-import bg from './bg.json';
-import bn from './bn.json';
-import cs from './cs.json';
-import da from './da.json';
-import de from './de.json';
-import el from './el.json';
 import en from './en.json';
-import es from './es.json';
-import fa from './fa.json';
-import fi from './fi.json';
-import fil from './fil.json';
-import fr from './fr.json';
-import gu from './gu.json';
-import ha from './ha.json';
-import he from './he.json';
-import hi from './hi.json';
-import hr from './hr.json';
-import hu from './hu.json';
-import id from './id.json';
-import it from './it.json';
-import ja from './ja.json';
-import km from './km.json';
-import kn from './kn.json';
-import ko from './ko.json';
-import ku from './ku.json';
-import ml from './ml.json';
-import mr from './mr.json';
-import ms from './ms.json';
-import my from './my.json';
-import ne from './ne.json';
-import nl from './nl.json';
-import no from './no.json';
-import pa from './pa.json';
-import pl from './pl.json';
-import ps from './ps.json';
-import pt from './pt.json';
-import ro from './ro.json';
-import roman from './roman.json';
-import ru from './ru.json';
-import sd from './sd.json';
-import si from './si.json';
-import sk from './sk.json';
-import so from './so.json';
-import sq from './sq.json';
-import sr from './sr.json';
-import sv from './sv.json';
-import sw from './sw.json';
-import ta from './ta.json';
-import te from './te.json';
-import th from './th.json';
-import tr from './tr.json';
-import uk from './uk.json';
 import ur from './ur.json';
-import uz from './uz.json';
-import vi from './vi.json';
-import yo from './yo.json';
-import zh from './zh.json';
-import zu from './zu.json';
+import roman from './roman.json';
 
-export const localeTranslations = {
-  af: af,
-  am: am,
-  ar: ar,
-  az: az,
-  bg: bg,
-  bn: bn,
-  cs: cs,
-  da: da,
-  de: de,
-  el: el,
-  en: en,
-  es: es,
-  fa: fa,
-  fi: fi,
-  fil: fil,
-  fr: fr,
-  gu: gu,
-  ha: ha,
-  he: he,
-  hi: hi,
-  hr: hr,
-  hu: hu,
-  id: id,
-  it: it,
-  ja: ja,
-  km: km,
-  kn: kn,
-  ko: ko,
-  ku: ku,
-  ml: ml,
-  mr: mr,
-  ms: ms,
-  my: my,
-  ne: ne,
-  nl: nl,
-  no: no,
-  pa: pa,
-  pl: pl,
-  ps: ps,
-  pt: pt,
-  ro: ro,
-  roman: roman,
-  ru: ru,
-  sd: sd,
-  si: si,
-  sk: sk,
-  so: so,
-  sq: sq,
-  sr: sr,
-  sv: sv,
-  sw: sw,
-  ta: ta,
-  te: te,
-  th: th,
-  tr: tr,
-  uk: uk,
-  ur: ur,
-  uz: uz,
-  vi: vi,
-  yo: yo,
-  zh: zh,
-  zu: zu,
-} as const;
+/** Eager core locales — keep startup JS light. Others load on demand. */
+export const localeTranslations: Record<string, Record<string, unknown>> = {
+  en,
+  ur,
+  roman,
+};
 
-export type LocaleCode = keyof typeof localeTranslations;
+const loaders: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
+  af: () => import('./af.json'),
+  am: () => import('./am.json'),
+  ar: () => import('./ar.json'),
+  az: () => import('./az.json'),
+  bg: () => import('./bg.json'),
+  bn: () => import('./bn.json'),
+  cs: () => import('./cs.json'),
+  da: () => import('./da.json'),
+  de: () => import('./de.json'),
+  el: () => import('./el.json'),
+  es: () => import('./es.json'),
+  fa: () => import('./fa.json'),
+  fi: () => import('./fi.json'),
+  fil: () => import('./fil.json'),
+  fr: () => import('./fr.json'),
+  gu: () => import('./gu.json'),
+  ha: () => import('./ha.json'),
+  he: () => import('./he.json'),
+  hi: () => import('./hi.json'),
+  hr: () => import('./hr.json'),
+  hu: () => import('./hu.json'),
+  id: () => import('./id.json'),
+  it: () => import('./it.json'),
+  ja: () => import('./ja.json'),
+  km: () => import('./km.json'),
+  kn: () => import('./kn.json'),
+  ko: () => import('./ko.json'),
+  ku: () => import('./ku.json'),
+  ml: () => import('./ml.json'),
+  mr: () => import('./mr.json'),
+  ms: () => import('./ms.json'),
+  my: () => import('./my.json'),
+  ne: () => import('./ne.json'),
+  nl: () => import('./nl.json'),
+  no: () => import('./no.json'),
+  pa: () => import('./pa.json'),
+  pl: () => import('./pl.json'),
+  ps: () => import('./ps.json'),
+  pt: () => import('./pt.json'),
+  ro: () => import('./ro.json'),
+  ru: () => import('./ru.json'),
+  sd: () => import('./sd.json'),
+  si: () => import('./si.json'),
+  sk: () => import('./sk.json'),
+  so: () => import('./so.json'),
+  sq: () => import('./sq.json'),
+  sr: () => import('./sr.json'),
+  sv: () => import('./sv.json'),
+  sw: () => import('./sw.json'),
+  ta: () => import('./ta.json'),
+  te: () => import('./te.json'),
+  th: () => import('./th.json'),
+  tr: () => import('./tr.json'),
+  uk: () => import('./uk.json'),
+  uz: () => import('./uz.json'),
+  vi: () => import('./vi.json'),
+  yo: () => import('./yo.json'),
+  zh: () => import('./zh.json'),
+  zu: () => import('./zu.json'),
+};
+
+const loading = new Map<string, Promise<Record<string, unknown>>>();
+
+/** Ensure a locale pack is available (no-op if already loaded / core). */
+export async function ensureLocaleLoaded(code: string): Promise<Record<string, unknown> | null> {
+  const key = String(code || 'en').toLowerCase();
+  if (localeTranslations[key]) return localeTranslations[key];
+  const loader = loaders[key];
+  if (!loader) return null;
+
+  let pending = loading.get(key);
+  if (!pending) {
+    pending = loader()
+      .then((mod) => {
+        const data = mod.default || (mod as unknown as Record<string, unknown>);
+        localeTranslations[key] = data;
+        loading.delete(key);
+        return data;
+      })
+      .catch((err) => {
+        loading.delete(key);
+        throw err;
+      });
+    loading.set(key, pending);
+  }
+  return pending;
+}

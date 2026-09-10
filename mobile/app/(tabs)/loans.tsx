@@ -12,7 +12,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import api from '@/lib/api';
+import api, { peekApiCache } from '@/lib/api';
 import { useFormatPKR } from '@/lib/format';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -101,7 +101,9 @@ export default function LoansScreen() {
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [people, setPeople] = useState<Contact[]>([]);
+  const [people, setPeople] = useState<Contact[]>(
+    () => peekApiCache<Contact[]>('/contacts', { includeSettled: 1 }) || []
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [expandedLent, setExpandedLent] = useState(false);
   const [expandedBorrowed, setExpandedBorrowed] = useState(false);

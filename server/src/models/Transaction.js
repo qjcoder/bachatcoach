@@ -44,5 +44,6 @@ const transactionSchema = new mongoose.Schema(
 
 transactionSchema.index({ user: 1, date: -1 });
 transactionSchema.index({ user: 1, type: 1, date: -1 });
+transactionSchema.index({ user: 1, recurringMonthly: 1, date: -1 });
 
 export default mongoose.model('Transaction', transactionSchema);

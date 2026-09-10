@@ -19,7 +19,7 @@ import { configureNativeDirection } from '@/lib/rtl';
 import { normalizeLanguage } from '@/lib/language';
 import { HeaderTitle, headerTitleContainerStyle } from '@/components/HeaderTitle';
 import '@/i18n';
-import { getStoredLanguage } from '@/i18n';
+import { getStoredLanguage, warmStoredLocale } from '@/i18n';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -37,9 +37,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     getStoredLanguage()
-      .then((lang) => {
+      .then(async (lang) => {
         configureNativeDirection(lang);
-        i18n.changeLanguage(lang);
+        await warmStoredLocale(lang);
+        await i18n.changeLanguage(lang);
         setLangReady(true);
       })
       .catch(() => setLangReady(true));

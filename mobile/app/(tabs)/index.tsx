@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import api from '@/lib/api';
+import api, { peekApiCache } from '@/lib/api';
 import { useFormatPKR, formatAmount } from '@/lib/format';
 import { getCurrency } from '@/constants/currencies';
 import { useAuth } from '@/context/AuthContext';
@@ -171,7 +171,9 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { bg, card, border, text, muted, well, chartEmpty, field } = usePageChrome();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(() =>
+    peekApiCache<DashboardSummary>('/dashboard/summary', { lang: i18n.language })
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async (fresh = false) => {

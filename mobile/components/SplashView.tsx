@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -35,10 +35,18 @@ export function SplashView({ onFinish }: SplashViewProps) {
   const dailyQuote = getDailyQuote(scriptLanguage(i18n.language));
   const rtl = I18nManager.isRTL;
 
+  const handleContinue = useCallback(() => {
+    if (finishing.current) return;
+    finishing.current = true;
+    Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() =>
+      onFinish()
+    );
+  }, [fadeAnim, onFinish]);
+
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 60, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 80, useNativeDriver: true }),
     ]).start();
 
     const loop = Animated.loop(
@@ -48,16 +56,15 @@ export function SplashView({ onFinish }: SplashViewProps) {
       ])
     );
     loop.start();
-    return () => loop.stop();
-  }, [fadeAnim, scaleAnim, nudgeAnim]);
 
-  const handleContinue = () => {
-    if (finishing.current) return;
-    finishing.current = true;
-    Animated.timing(fadeAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start(() =>
-      onFinish()
-    );
-  };
+    // Auto-enter quickly — tap still skips instantly.
+    const auto = setTimeout(() => handleContinue(), 650);
+
+    return () => {
+      loop.stop();
+      clearTimeout(auto);
+    };
+  }, [fadeAnim, scaleAnim, nudgeAnim, handleContinue]);
 
   return (
     <View style={styles.container}>

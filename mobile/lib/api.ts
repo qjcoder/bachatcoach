@@ -11,8 +11,8 @@ function getApiUrl(): string {
 }
 
 /** Fresh: serve without network. Stale: serve instantly + revalidate in background. */
-const FRESH_TTL_MS = 90_000;
-const STALE_TTL_MS = 10 * 60_000;
+const FRESH_TTL_MS = 120_000;
+const STALE_TTL_MS = 15 * 60_000;
 
 type CacheEntry = {
   freshUntil: number;
@@ -95,8 +95,14 @@ function invalidateForMutation(url?: string) {
   if (path.includes('/contacts')) {
     prefixes.push('/contacts', '/dashboard');
   }
+  if (path.includes('/bank-accounts') || path.includes('/bankAccounts')) {
+    prefixes.push('/bank-accounts', '/bankAccounts');
+  }
   if (path.includes('/goals')) {
     prefixes.push('/goals', '/dashboard');
+  }
+  if (path.includes('/search')) {
+    prefixes.push('/search');
   }
   if (path.includes('/auth') || path.includes('/backup') || !prefixes.length) {
     getCache.clear();
@@ -121,7 +127,7 @@ export function peekApiCache<T = unknown>(url: string, params?: Record<string, u
 
 export const api = axios.create({
   baseURL: getApiUrl(),
-  timeout: 12000,
+  timeout: 8000,
 });
 
 function scheduleRevalidate(config: InternalAxiosRequestConfig) {

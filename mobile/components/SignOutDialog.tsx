@@ -111,8 +111,6 @@ export function SignOutDialog({ visible, busy, onClose, onConfirm }: Props) {
             <AppText style={styles.titleAccent}>{t('settings.signOutTitleAccent')}</AppText>
           </AppText>
 
-          <AppText style={[styles.body, { color: colors.muted }]}>{t('settings.signOutBody')}</AppText>
-
           <View style={styles.safeBox}>
             <View style={styles.safeIcon}>
               <Ionicons name="shield-checkmark" size={18} color="#fff" />

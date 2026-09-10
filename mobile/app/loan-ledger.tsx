@@ -266,6 +266,10 @@ export default function LoanLedgerScreen() {
       <FlatList
         data={report.entries}
         keyExtractor={(item, index) => item.id || `${item.date}-${index}`}
+        initialNumToRender={12}
+        windowSize={7}
+        maxToRenderPerBatch={10}
+        removeClippedSubviews
         contentContainerStyle={[
           styles.listContent,
           report.entries.length === 0 && styles.listEmpty,
@@ -367,11 +371,12 @@ export default function LoanLedgerScreen() {
                 </View>
               </RTLRow>
 
-              <View style={styles.actions}>
+              <RTLRow style={styles.actions} gap={8}>
                 {!settled ? (
                   <Pressable
                     onPress={() => setPaymentOpen(true)}
                     style={({ pressed }) => [
+                      styles.actionBtn,
                       styles.primaryBtn,
                       { backgroundColor: tint, opacity: pressed ? 0.9 : 1 },
                     ]}
@@ -384,7 +389,13 @@ export default function LoanLedgerScreen() {
                       size={18}
                       color="#FFFFFF"
                     />
-                    <AppText variant="captionBold" color="#FFFFFF">
+                    <AppText
+                      variant="captionBold"
+                      color="#FFFFFF"
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                      align="center">
                       {paymentLabel}
                     </AppText>
                   </Pressable>
@@ -395,6 +406,7 @@ export default function LoanLedgerScreen() {
                     onPress={remindOnWhatsApp}
                     disabled={reminding}
                     style={({ pressed }) => [
+                      styles.actionBtn,
                       styles.secondaryBtn,
                       {
                         borderColor: `${Brand.whatsapp}55`,
@@ -409,7 +421,13 @@ export default function LoanLedgerScreen() {
                     ) : (
                       <Ionicons name="logo-whatsapp" size={18} color={Brand.whatsapp} />
                     )}
-                    <AppText variant="captionBold" color={Brand.whatsapp}>
+                    <AppText
+                      variant="captionBold"
+                      color={Brand.whatsapp}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                      align="center">
                       {t('loans.remind')}
                     </AppText>
                   </Pressable>
@@ -419,6 +437,7 @@ export default function LoanLedgerScreen() {
                   onPress={shareLedgerPdf}
                   disabled={sharing}
                   style={({ pressed }) => [
+                    styles.actionBtn,
                     styles.secondaryBtn,
                     {
                       borderColor: `${tint}40`,
@@ -433,11 +452,19 @@ export default function LoanLedgerScreen() {
                   ) : (
                     <Ionicons name="share-outline" size={18} color={tint} />
                   )}
-                  <AppText variant="captionBold" color={tint}>
-                    {sharing ? t('loans.exportingPdf') : t('loans.shareLedgerWhatsApp')}
+                  <AppText
+                    variant="captionBold"
+                    color={tint}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    align="center">
+                    {sharing
+                      ? t('loans.exportingPdf')
+                      : t('loans.shareShort', { defaultValue: 'Share' })}
                   </AppText>
                 </Pressable>
-              </View>
+              </RTLRow>
             </View>
 
             <RTLRow style={styles.sectionHead} gap={8}>
@@ -619,25 +646,25 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   statAmount: { writingDirection: 'ltr' },
-  actions: { gap: 8 },
-  primaryBtn: {
-    minHeight: 46,
-    borderRadius: Radius.full,
-    flexDirection: 'row',
+  actions: {
+    alignItems: 'stretch',
+  },
+  actionBtn: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+  },
+  primaryBtn: {
+    borderWidth: 0,
   },
   secondaryBtn: {
-    minHeight: 46,
-    borderRadius: Radius.full,
     borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
   },
   sectionHead: {
     alignItems: 'center',

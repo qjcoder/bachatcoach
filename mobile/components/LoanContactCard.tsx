@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
@@ -41,7 +42,7 @@ type LoanContactCardProps = {
   reminding?: boolean;
 };
 
-export function LoanContactCard({
+export const LoanContactCard = memo(function LoanContactCard({
   name,
   purpose,
   amount,
@@ -142,7 +143,7 @@ export function LoanContactCard({
       ) : null}
     </View>
   );
-}
+});
 
 type LoanActionButtonProps = {
   label: string;

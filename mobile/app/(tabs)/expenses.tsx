@@ -23,7 +23,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import api from '@/lib/api';
+import api, { peekApiCache } from '@/lib/api';
 import { getCategoryLabel } from '@/lib/category';
 import { useFormatPKR, formatAmount, formatTransactionDate, formatTransactionTime } from '@/lib/format';
 import { getCurrency } from '@/constants/currencies';
@@ -306,7 +306,9 @@ export default function ExpensesScreen() {
   const [monthExpenseCount, setMonthExpenseCount] = useState(0);
   const [monthIncomeCount, setMonthIncomeCount] = useState(0);
   const [monthSavingsCount, setMonthSavingsCount] = useState(0);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(() =>
+    peekApiCache<DashboardSummary>('/dashboard/summary', { lang: i18n.language })
+  );
   const [monthRows, setMonthRows] = useState<Array<MonthlyReportRow & { year: number }>>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState<TransactionPeriod>('month');
@@ -321,39 +323,6 @@ export default function ExpensesScreen() {
   const isSavingsMode = flowMode === 'savings';
   const isExpenseMode = flowMode === 'expense';
 
-  const loadPeriod = useCallback(
-    async (
-      activePeriod: TransactionPeriod,
-      kind: FlowMode,
-      month: number,
-      year: number,
-      fresh = false
-    ) => {
-      const { from, to } =
-        activePeriod === 'month'
-          ? monthBounds(month, year)
-          : getTransactionPeriodRange(activePeriod);
-      const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
-      if (kind === 'savings') {
-        const { data } = await api.get('/transactions', {
-          params: { from, to, limit: periodFetchLimit(activePeriod) },
-          headers,
-        });
-        setItems((data as Transaction[]).filter(isSavingsTxn));
-        return;
-      }
-      const { data } = await api.get('/transactions', {
-        params: { from, to, type: kind, limit: periodFetchLimit(activePeriod) },
-        headers,
-      });
-      const list = (data as Transaction[]).filter((item) =>
-        kind === 'income' ? item.type === 'income' : item.type === 'expense' && !isSavingsTxn(item)
-      );
-      setItems(list);
-    },
-    []
-  );
-
   const loadOverview = useCallback(
     async (month: number, year: number, fresh = false) => {
       const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
@@ -361,35 +330,25 @@ export default function ExpensesScreen() {
       const currentYear = new Date().getFullYear();
       const prevYear = currentYear - 1;
       const needsPrevYear = new Date().getMonth() < 6;
-      const [summaryRes, expenseRes, incomeRes, monthAllRes, reportRes, prevReportRes] =
-        await Promise.all([
-          api.get('/dashboard/summary', {
-            params: { lang: i18n.language, month, year },
-            headers,
-          }),
-          api.get('/transactions', {
-            params: { from, to, type: 'expense', limit: periodFetchLimit('month') },
-            headers,
-          }),
-          api.get('/transactions', {
-            params: { from, to, type: 'income', limit: periodFetchLimit('month') },
-            headers,
-          }),
-          api.get('/transactions', {
-            params: { from, to, limit: periodFetchLimit('month') },
-            headers,
-          }),
-          api.get('/dashboard/monthly-report', { params: { year: currentYear }, headers }),
-          needsPrevYear
-            ? api.get('/dashboard/monthly-report', { params: { year: prevYear }, headers })
-            : Promise.resolve({ data: { months: [] as MonthlyReportRow[] } }),
-        ]);
+      const [summaryRes, monthAllRes, reportRes, prevReportRes] = await Promise.all([
+        api.get('/dashboard/summary', {
+          params: { lang: i18n.language, month, year },
+          headers,
+        }),
+        api.get('/transactions', {
+          params: { from, to, limit: periodFetchLimit('month') },
+          headers,
+        }),
+        api.get('/dashboard/monthly-report', { params: { year: currentYear }, headers }),
+        needsPrevYear
+          ? api.get('/dashboard/monthly-report', { params: { year: prevYear }, headers })
+          : Promise.resolve({ data: { months: [] as MonthlyReportRow[] } }),
+      ]);
+      const all = monthAllRes.data as Transaction[];
       setSummary(summaryRes.data);
-      setMonthExpenseCount(
-        (expenseRes.data as Transaction[]).filter((item) => !isSavingsTxn(item)).length
-      );
-      setMonthIncomeCount((incomeRes.data as Transaction[]).length);
-      setMonthSavingsCount((monthAllRes.data as Transaction[]).filter(isSavingsTxn).length);
+      setMonthExpenseCount(all.filter((item) => item.type === 'expense' && !isSavingsTxn(item)).length);
+      setMonthIncomeCount(all.filter((item) => item.type === 'income').length);
+      setMonthSavingsCount(all.filter(isSavingsTxn).length);
       const currentRows = ((reportRes.data?.months as MonthlyReportRow[]) || []).map((r) => ({
         ...r,
         year: currentYear,
@@ -403,13 +362,47 @@ export default function ExpensesScreen() {
     [i18n.language]
   );
 
+  const loadPeriod = useCallback(
+    async (
+      activePeriod: TransactionPeriod,
+      kind: FlowMode,
+      month: number,
+      year: number,
+      fresh = false
+    ) => {
+      const { from, to } =
+        activePeriod === 'month'
+          ? monthBounds(month, year)
+          : getTransactionPeriodRange(activePeriod);
+      const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
+      // One untyped list — filter client-side (matches prefetch + overview cache key).
+      const { data } = await api.get('/transactions', {
+        params: { from, to, limit: periodFetchLimit(activePeriod) },
+        headers,
+      });
+      const all = data as Transaction[];
+      if (kind === 'savings') {
+        setItems(all.filter(isSavingsTxn));
+        return;
+      }
+      if (kind === 'income') {
+        setItems(all.filter((item) => item.type === 'income'));
+        return;
+      }
+      setItems(all.filter((item) => item.type === 'expense' && !isSavingsTxn(item)));
+    },
+    []
+  );
+
   useFocusEffect(
     useCallback(() => {
-      loadOverview(focusMonth, focusYear).catch(() => {
-        /* keep last overview on focus errors */
-      });
-      loadPeriod(period, flowMode, focusMonth, focusYear).catch(() => {
-        /* keep last list on focus errors */
+      const run = async () => {
+        await loadOverview(focusMonth, focusYear);
+        // Month list reuses the overview txn cache key (instant after overview).
+        await loadPeriod(period, flowMode, focusMonth, focusYear);
+      };
+      run().catch(() => {
+        /* keep last overview/list on focus errors */
       });
     }, [loadOverview, loadPeriod, period, flowMode, focusMonth, focusYear])
   );
@@ -624,7 +617,7 @@ export default function ExpensesScreen() {
 
   const openReceipt = (ref: string) => {
     closeDetails();
-    const delay = Platform.OS === 'ios' ? 380 : 120;
+    const delay = Platform.OS === 'ios' ? 120 : 40;
     setTimeout(() => setReceiptRef(ref), delay);
   };
 

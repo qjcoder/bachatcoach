@@ -83,24 +83,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const token = await SecureStore.getItemAsync('token');
-        const userJson = await SecureStore.getItemAsync('user');
+        const [token, userJson] = await Promise.all([
+          SecureStore.getItemAsync('token'),
+          SecureStore.getItemAsync('user'),
+        ]);
         if (token && userJson) {
           setAuthToken(token);
           const userData = JSON.parse(userJson) as User;
           setUser(userData);
-          try {
-            const { data } = await api.get('/auth/me');
-            const fresh = { ...userData, ...data.user } as User;
-            await SecureStore.setItemAsync('user', JSON.stringify(fresh));
-            // Keep language in sync with the cloud account across devices.
-            await applyAccountLanguage(fresh.language);
-            setUser(fresh);
-            void prefetchCriticalData(fresh.language || 'en');
-          } catch {
-            // Keep cached user if refresh fails (offline, etc.)
-            void prefetchCriticalData(userData.language || 'en');
-          }
+          // Unlock UI immediately from local session — refresh profile in background.
+          setLoading(false);
+          void prefetchCriticalData(userData.language || 'en');
+          void (async () => {
+            try {
+              const { data } = await api.get('/auth/me');
+              const fresh = { ...userData, ...data.user } as User;
+              await SecureStore.setItemAsync('user', JSON.stringify(fresh));
+              await applyAccountLanguage(fresh.language);
+              setUser(fresh);
+            } catch {
+              // Keep cached user if refresh fails (offline, etc.)
+            }
+          })();
+          return;
         }
       } finally {
         setLoading(false);

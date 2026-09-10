@@ -79,7 +79,7 @@ router.get('/summary', async (req, res, next) => {
     const prevYear = month === 1 ? year - 1 : year;
     const prevRange = monthRange(prevMonth, prevYear);
 
-    const [txFacet, lentContacts, borrowedContacts, goals, userDoc, recurringTemplates] =
+    const [txFacet, openContacts, goals, userDoc, recurringTemplates] =
       await Promise.all([
       Transaction.aggregate([
         {
@@ -134,28 +134,51 @@ router.get('/summary', async (req, res, next) => {
                 },
               },
             ],
-            currentFull: [
+            salaryThisMonth: [
+              {
+                $match: {
+                  type: 'income',
+                  category: 'salary',
+                  date: { $gte: start, $lt: end },
+                },
+              },
+              { $limit: 1 },
+              { $project: { _id: 1 } },
+            ],
+            monthKeys: [
               { $match: { date: { $gte: start, $lt: end } } },
               {
                 $project: {
-                  type: 1,
-                  category: 1,
-                  customCategory: 1,
-                  amount: 1,
-                  note: 1,
+                  key: {
+                    $concat: [
+                      '$type',
+                      '|',
+                      { $ifNull: ['$category', ''] },
+                      '|',
+                      { $ifNull: ['$customCategory', ''] },
+                      '|',
+                      { $toString: '$amount' },
+                      '|',
+                      { $toLower: { $trim: { input: { $ifNull: ['$note', ''] } } } },
+                    ],
+                  },
                 },
               },
+              { $group: { _id: '$key' } },
             ],
           },
         },
       ]),
-      Contact.find({ user: req.userId, direction: 'i_lent', isSettled: false })
+      Contact.find({
+        user: req.userId,
+        isSettled: false,
+        direction: { $in: ['i_lent', 'i_borrowed'] },
+      })
         .select('direction entries')
         .lean(),
-      Contact.find({ user: req.userId, direction: 'i_borrowed', isSettled: false })
-        .select('direction entries')
+      Goal.find({ user: req.userId, isCompleted: false })
+        .select('_id title targetAmount currentAmount isCompleted')
         .lean(),
-      Goal.find({ user: req.userId, isCompleted: false }).lean(),
       User.findById(req.userId).select('salaryDay').lean(),
       Transaction.find({
         user: req.userId,
@@ -163,7 +186,7 @@ router.get('/summary', async (req, res, next) => {
         date: { $lt: start },
       })
         .sort({ date: -1 })
-        .limit(40)
+        .limit(24)
         .select('type category customCategory amount note paymentMethod')
         .lean(),
     ]);
@@ -183,6 +206,8 @@ router.get('/summary', async (req, res, next) => {
     const lang = req.query.lang === 'ur' ? 'ur' : 'en';
     const dailyQuote = getDailyQuote(lang);
 
+    const lentContacts = (openContacts || []).filter((c) => c.direction === 'i_lent');
+    const borrowedContacts = (openContacts || []).filter((c) => c.direction === 'i_borrowed');
     const totalLent = lentContacts.reduce((sum, c) => sum + contactBalance(c), 0);
     const totalBorrowed = borrowedContacts.reduce((sum, c) => sum + contactBalance(c), 0);
 
@@ -203,9 +228,7 @@ router.get('/summary', async (req, res, next) => {
     const today = now.getDate();
     const dayDiff = Math.abs(today - salaryDay);
     const nearSalary = dayDiff <= 2 || (salaryDay >= 28 && today >= 28);
-    const hasSalaryThisMonth = (facet.currentFull || []).some(
-      (t) => t.type === 'income' && t.category === 'salary'
-    );
+    const hasSalaryThisMonth = (facet.salaryThisMonth || []).length > 0;
     if (nearSalary && !hasSalaryThisMonth) {
       suggestions.push({
         id: 'salary',
@@ -222,12 +245,7 @@ router.get('/summary', async (req, res, next) => {
     }
 
     const seenKeys = new Set();
-    const thisMonthKeys = new Set(
-      (facet.currentFull || []).map(
-        (t) =>
-          `${t.type}|${t.category || ''}|${t.customCategory || ''}|${Number(t.amount)}|${String(t.note || '').trim().toLowerCase()}`
-      )
-    );
+    const thisMonthKeys = new Set((facet.monthKeys || []).map((row) => row._id).filter(Boolean));
     for (const tmpl of recurringTemplates || []) {
       const key = `${tmpl.type}|${tmpl.category || ''}|${tmpl.customCategory || ''}|${Number(tmpl.amount)}|${String(tmpl.note || '').trim().toLowerCase()}`;
       if (seenKeys.has(key) || thisMonthKeys.has(key)) continue;

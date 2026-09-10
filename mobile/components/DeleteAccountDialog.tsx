@@ -86,10 +86,6 @@ export function DeleteAccountDialog({ visible, busy, onClose, onConfirm }: Props
             <AppText style={styles.titleAccent}>{t('settings.deleteMissTitleAccent')}</AppText>
           </AppText>
 
-          <AppText style={[styles.body, { color: colors.muted }]}>
-            {t('settings.deleteMissBody')}
-          </AppText>
-
           <View style={styles.warnBox}>
             <View style={styles.warnIcon}>
               <Ionicons name="trash" size={16} color="#fff" />

@@ -99,7 +99,7 @@ export default function SearchScreen() {
           setEntries([]);
         })
         .finally(() => setLoading(false));
-    }, 280);
+    }, 180);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -164,6 +164,8 @@ export default function SearchScreen() {
               ? `c-${item.data.id}`
               : `e-${item.data.id}`
         }
+        initialNumToRender={14}
+        windowSize={8}
         contentContainerStyle={[
           styles.list,
           hits.length === 0 && styles.listEmpty,
