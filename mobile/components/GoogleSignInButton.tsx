@@ -59,15 +59,67 @@ const gStyles = StyleSheet.create({
   },
 });
 
-export function GoogleSignInButton({ onSuccess }: Props) {
+function GoogleSignInChrome({
+  loading,
+  busy,
+  onPress,
+}: {
+  loading: boolean;
+  busy: boolean;
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.wrap}>
+      <Pressable
+        onPress={onPress}
+        disabled={busy}
+        style={({ pressed }) => [styles.pressable, pressed && styles.pressed, busy && styles.disabled]}>
+        <LinearGradient
+          colors={['#4285F4', '#34A853', '#FBBC05', '#EA4335']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.gradientBorder}>
+          <View style={styles.inner}>
+            {loading ? (
+              <ActivityIndicator color={Brand.text} size="small" />
+            ) : (
+              <View style={styles.content}>
+                <GoogleG />
+                <AppText
+                  variant="bodySemibold"
+                  color={Brand.text}
+                  shrink
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                  style={styles.label}>
+                  {t('auth.continueWithGoogle')}
+                </AppText>
+              </View>
+            )}
+          </View>
+        </LinearGradient>
+      </Pressable>
+
+      <View style={styles.dividerRow}>
+        <View style={styles.line} />
+        <AppText variant="caption" color={Brand.textMuted} shrink style={styles.orText}>
+          {t('auth.orEmail')}
+        </AppText>
+        <View style={styles.line} />
+      </View>
+    </View>
+  );
+}
+
+/** Android: native Play Services only — never init AuthSession (needs androidClientId). */
+function AndroidGoogleSignInButton({ onSuccess }: Props) {
   const { t } = useTranslation();
   const { loginWithGoogle } = useAuth();
   const { showAlert } = useDialog();
   const [loading, setLoading] = useState(false);
-  // iOS keeps AuthSession; Android uses native Play Services Sign-In.
-  const [request, , promptAsync] = useGoogleAuthRequest();
   const configured = isGoogleAuthConfigured();
-  const useNativeAndroid = Platform.OS === 'android';
 
   const handlePress = async () => {
     if (!configured) {
@@ -80,14 +132,44 @@ export function GoogleSignInButton({ onSuccess }: Props) {
     }
     setLoading(true);
     try {
-      if (useNativeAndroid) {
-        const { idToken, accessToken } = await signInWithGoogleNative();
-        await persistGoogleTokens(accessToken, null, { drive: false });
-        await loginWithGoogle(idToken);
-        onSuccess?.();
-        return;
-      }
+      const { idToken, accessToken } = await signInWithGoogleNative();
+      await persistGoogleTokens(accessToken, null, { drive: false });
+      await loginWithGoogle(idToken);
+      onSuccess?.();
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'SIGN_IN_CANCELLED' || code === 'ERR_CANCELED') return;
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : t('auth.googleFailed'));
+      showAlert({ title: t('common.error'), message, tone: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  return <GoogleSignInChrome loading={loading} busy={loading} onPress={handlePress} />;
+}
+
+function IosGoogleSignInButton({ onSuccess }: Props) {
+  const { t } = useTranslation();
+  const { loginWithGoogle } = useAuth();
+  const { showAlert } = useDialog();
+  const [loading, setLoading] = useState(false);
+  const [request, , promptAsync] = useGoogleAuthRequest();
+  const configured = isGoogleAuthConfigured();
+
+  const handlePress = async () => {
+    if (!configured) {
+      showAlert({
+        title: t('auth.googleNotConfiguredTitle'),
+        message: t('auth.googleNotConfigured'),
+        tone: 'warning',
+      });
+      return;
+    }
+    setLoading(true);
+    try {
       const result = await promptAsync();
       if (result.type !== 'success') {
         if (result.type === 'error') {
@@ -137,50 +219,20 @@ export function GoogleSignInButton({ onSuccess }: Props) {
     }
   };
 
-  const busy = loading || (!useNativeAndroid && !request);
-
   return (
-    <View style={styles.wrap}>
-      <Pressable
-        onPress={handlePress}
-        disabled={busy}
-        style={({ pressed }) => [styles.pressable, pressed && styles.pressed, busy && styles.disabled]}>
-        <LinearGradient
-          colors={['#4285F4', '#34A853', '#FBBC05', '#EA4335']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.gradientBorder}>
-          <View style={styles.inner}>
-            {loading ? (
-              <ActivityIndicator color={Brand.text} size="small" />
-            ) : (
-              <View style={styles.content}>
-                <GoogleG />
-                <AppText
-                  variant="bodySemibold"
-                  color={Brand.text}
-                  shrink
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.85}
-                  style={styles.label}>
-                  {t('auth.continueWithGoogle')}
-                </AppText>
-              </View>
-            )}
-          </View>
-        </LinearGradient>
-      </Pressable>
-
-      <View style={styles.dividerRow}>
-        <View style={styles.line} />
-        <AppText variant="caption" color={Brand.textMuted} shrink style={styles.orText}>
-          {t('auth.orEmail')}
-        </AppText>
-        <View style={styles.line} />
-      </View>
-    </View>
+    <GoogleSignInChrome
+      loading={loading}
+      busy={loading || !request}
+      onPress={handlePress}
+    />
   );
+}
+
+export function GoogleSignInButton({ onSuccess }: Props) {
+  if (Platform.OS === 'android') {
+    return <AndroidGoogleSignInButton onSuccess={onSuccess} />;
+  }
+  return <IosGoogleSignInButton onSuccess={onSuccess} />;
 }
 
 const styles = StyleSheet.create({

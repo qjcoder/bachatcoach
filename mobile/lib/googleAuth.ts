@@ -55,14 +55,20 @@ export function getGoogleRedirectUri() {
   return makeRedirectUri({ scheme: 'bachatcoach' });
 }
 
+/** Avoid AuthSession hard-crash when EAS env was not linked into the binary. */
+const MISSING_CLIENT_PLACEHOLDER = '0-missing.apps.googleusercontent.com';
+
 function googleAuthConfig(scopes: readonly string[], opts?: { offline?: boolean }) {
   const { webClientId, iosClientId, androidClientId } = getGoogleClientIds();
   const redirectUri = getGoogleRedirectUri();
+  const web = webClientId || MISSING_CLIENT_PLACEHOLDER;
+  const ios = iosClientId || webClientId || MISSING_CLIENT_PLACEHOLDER;
+  const android = androidClientId || webClientId || MISSING_CLIENT_PLACEHOLDER;
 
   return {
-    webClientId: webClientId || undefined,
-    iosClientId: iosClientId || webClientId || undefined,
-    androidClientId: androidClientId || webClientId || undefined,
+    webClientId: web,
+    iosClientId: ios,
+    androidClientId: android,
     // Native Google clients are public (PKCE). Never ship a client secret in the app.
     scopes: [...scopes],
     redirectUri,
