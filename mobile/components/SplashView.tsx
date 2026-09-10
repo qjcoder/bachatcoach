@@ -57,14 +57,10 @@ export function SplashView({ onFinish }: SplashViewProps) {
     );
     loop.start();
 
-    // Auto-enter quickly — tap still skips instantly.
-    const auto = setTimeout(() => handleContinue(), 650);
-
     return () => {
       loop.stop();
-      clearTimeout(auto);
     };
-  }, [fadeAnim, scaleAnim, nudgeAnim, handleContinue]);
+  }, [fadeAnim, scaleAnim, nudgeAnim]);
 
   return (
     <View style={styles.container}>

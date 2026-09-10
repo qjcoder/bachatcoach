@@ -11,7 +11,6 @@ import { LockProvider } from '@/context/LockContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { LockGate } from '@/components/LockGate';
 import { SplashView } from '@/components/SplashView';
-import { OnboardingView, isOnboardingDone } from '@/components/OnboardingView';
 import { AppDirection } from '@/components/AppDirection';
 import { useAppFonts } from '@/hooks/useAppFonts';
 import { Brand } from '@/constants/theme';
@@ -33,8 +32,6 @@ function RootLayout() {
   const [loaded, error] = useAppFonts();
   const [langReady, setLangReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardingChecked, setOnboardingChecked] = useState(false);
   const { i18n, t } = useTranslation();
 
   useEffect(() => {
@@ -56,21 +53,12 @@ function RootLayout() {
   }, [i18n]);
 
   useEffect(() => {
-    void isOnboardingDone()
-      .then((done) => {
-        setShowOnboarding(!done);
-        setOnboardingChecked(true);
-      })
-      .catch(() => setOnboardingChecked(true));
-  }, []);
-
-  useEffect(() => {
     if (loaded && langReady) SplashScreen.hideAsync();
   }, [loaded, langReady]);
 
   const onSplashFinish = useCallback(() => setShowSplash(false), []);
 
-  if (!loaded || !langReady || !onboardingChecked) return null;
+  if (!loaded || !langReady) return null;
 
   const lang = normalizeLanguage(i18n.language);
   const headerOptions = {
@@ -95,9 +83,6 @@ function RootLayout() {
         <AppDirection>
           <RootLayoutNav headerOptions={headerOptions} />
           {showSplash && <SplashView onFinish={onSplashFinish} />}
-          {!showSplash && showOnboarding ? (
-            <OnboardingView onFinish={() => setShowOnboarding(false)} />
-          ) : null}
         </AppDirection>
       </ThemeProvider>
     </SafeAreaProvider>
