@@ -5,12 +5,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 
-import { AuthProvider } from '@/context/AuthContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { DialogProvider } from '@/context/DialogContext';
 import { LockProvider } from '@/context/LockContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { LockGate } from '@/components/LockGate';
 import { SplashView } from '@/components/SplashView';
+import { OnboardingView, isOnboardingDone } from '@/components/OnboardingView';
 import { AppDirection } from '@/components/AppDirection';
 import { useAppFonts } from '@/hooks/useAppFonts';
 import { Brand } from '@/constants/theme';
@@ -18,21 +19,29 @@ import { getFontFamily, Type } from '@/constants/typography';
 import { configureNativeDirection } from '@/lib/rtl';
 import { normalizeLanguage } from '@/lib/language';
 import { HeaderTitle, headerTitleContainerStyle } from '@/components/HeaderTitle';
+import { initSentry, Sentry } from '@/lib/sentry';
+import { syncLocalReminders } from '@/lib/localReminders';
 import '@/i18n';
 import { getStoredLanguage, warmStoredLocale } from '@/i18n';
 
 export { ErrorBoundary } from 'expo-router';
 
+initSentry();
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayout() {
   const [loaded, error] = useAppFonts();
   const [langReady, setLangReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
   const { i18n, t } = useTranslation();
 
   useEffect(() => {
-    if (error) throw error;
+    if (error) {
+      Sentry.captureException(error);
+      throw error;
+    }
   }, [error]);
 
   useEffect(() => {
@@ -47,12 +56,21 @@ export default function RootLayout() {
   }, [i18n]);
 
   useEffect(() => {
+    void isOnboardingDone()
+      .then((done) => {
+        setShowOnboarding(!done);
+        setOnboardingChecked(true);
+      })
+      .catch(() => setOnboardingChecked(true));
+  }, []);
+
+  useEffect(() => {
     if (loaded && langReady) SplashScreen.hideAsync();
   }, [loaded, langReady]);
 
   const onSplashFinish = useCallback(() => setShowSplash(false), []);
 
-  if (!loaded || !langReady) return null;
+  if (!loaded || !langReady || !onboardingChecked) return null;
 
   const lang = normalizeLanguage(i18n.language);
   const headerOptions = {
@@ -67,7 +85,6 @@ export default function RootLayout() {
     headerTitleContainerStyle,
     headerTitleAlign: 'center' as const,
     headerShadowVisible: false,
-    // Avoid Expo route group label "(tabs)" on the iOS back pill
     headerBackTitle: t('common.back'),
     headerBackButtonDisplayMode: 'minimal' as const,
   };
@@ -78,10 +95,30 @@ export default function RootLayout() {
         <AppDirection>
           <RootLayoutNav headerOptions={headerOptions} />
           {showSplash && <SplashView onFinish={onSplashFinish} />}
+          {!showSplash && showOnboarding ? (
+            <OnboardingView onFinish={() => setShowOnboarding(false)} />
+          ) : null}
         </AppDirection>
       </ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+export default Sentry.wrap(RootLayout);
+
+function ReminderSync() {
+  const { user } = useAuth();
+  const { i18n } = useTranslation();
+
+  useEffect(() => {
+    if (!user) return;
+    void syncLocalReminders({
+      language: i18n.language || user.language,
+      salaryDay: user.salaryDay,
+    });
+  }, [user?.id, user?.salaryDay, i18n.language]);
+
+  return null;
 }
 
 function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
@@ -92,6 +129,7 @@ function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
       <DialogProvider>
         <LockProvider>
           <LockGate>
+            <ReminderSync />
             <Stack screenOptions={headerOptions}>
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen
@@ -101,8 +139,6 @@ function RootLayoutNav({ headerOptions }: { headerOptions: object }) {
               <Stack.Screen
                 name="add-transaction"
                 options={{
-                  // Regular stack push (not native modal) so close/back always works
-                  // and AppDialog can sit above this screen in the same window.
                   animation: 'slide_from_bottom',
                   headerShown: false,
                 }}

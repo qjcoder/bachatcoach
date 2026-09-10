@@ -460,6 +460,16 @@
     "ledger": "Khata",
     "hasReceipt": "Receipt"
   },
+  "onboarding": {
+    "skip": "Skip",
+    "getStarted": "Shuru karein",
+    "cashflowTitle": "Paisa aanay jaanay track karein",
+    "cashflowBody": "Kharchay, amdani aur bachat seconds mein darj karein — mahina ek nazar mein dekhein.",
+    "loansTitle": "Qarz khoein nahi",
+    "loansBody": "Diye ya liye qarz ka saaf khata rakhein, yaad-dahani aur WhatsApp share ke sath.",
+    "safeTitle": "Private aur mehfooz",
+    "safeBody": "PIN ya biometrics se app lock karein, aur jab chahen Google Drive par backup lein."
+  },
   "goals": {
     "title": "Bachat ke ahdaf",
     "addGoal": "Naya hadaf",
@@ -581,7 +591,9 @@
     "themeSystem": "System",
     "backup": "Backup & Data",
     "notifications": "Notifications",
-    "pushNotifications": "Push Notifications",
+    "pushNotifications": "Qarz aur salary yaad-dahani",
+    "remindersHint": "Is device par due loans aur salary day",
+    "notificationsPermissionDenied": "Qarz aur salary yaad-dahani ke liye system settings mein notifications on karein.",
     "emailNotifications": "Email Notifications",
     "emailNotificationsSubtitle": "Tips and account updates",
     "preferences": "Preferences",

@@ -460,6 +460,16 @@
     "ledger": "کھاتہ",
     "hasReceipt": "رسید"
   },
+  "onboarding": {
+    "skip": "چھوڑیں",
+    "getStarted": "شروع کریں",
+    "cashflowTitle": "رقم آنا جانا ٹریک کریں",
+    "cashflowBody": "اخراجات، آمدنی اور بچت سیکنڈوں میں درج کریں — مہینہ ایک نظر میں دیکھیں۔",
+    "loansTitle": "قرض کھوئیں نہیں",
+    "loansBody": "دیے یا لیے قرض کا واضح کھاتہ رکھیں، یاددہانی اور واٹس ایپ شیئر کے ساتھ۔",
+    "safeTitle": "نجی اور محفوظ",
+    "safeBody": "PIN یا بائیومیٹرکس سے ایپ لاک کریں، اور جب چاہیں گوگل ڈرائیو پر بیک اپ لیں۔"
+  },
   "goals": {
     "title": "بچت کے اہداف",
     "addGoal": "نیا ہدف",
@@ -581,7 +591,9 @@
     "themeSystem": "سسٹم",
     "backup": "بیک اپ اور ڈیٹا",
     "notifications": "اطلاعات",
-    "pushNotifications": "پش اطلاعات",
+    "pushNotifications": "قرض اور تنخواہ یاددہانی",
+    "remindersHint": "اس ڈیوائس پر واجب الادا قرض اور تنخواہ کا دن",
+    "notificationsPermissionDenied": "قرض اور تنخواہ یاددہانی کے لیے سسٹم سیٹنگز میں اطلاعات آن کریں۔",
     "emailNotifications": "ای میل اطلاعات",
     "emailNotificationsSubtitle": "تجاویز اور اکاؤنٹ اپ ڈیٹس",
     "preferences": "ترجیحات",

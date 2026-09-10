@@ -60,8 +60,12 @@ import { BankAccountsMenuRow } from '@/components/BankAccountsSection';
 import { DeleteAccountDialog } from '@/components/DeleteAccountDialog';
 import { SignOutDialog } from '@/components/SignOutDialog';
 import type { ThemeMode } from '@/context/ThemeContext';
-
-const PUSH_NOTIFICATIONS_KEY = 'bachatcoach_push_notifications';
+import {
+  areRemindersEnabled,
+  setRemindersEnabled,
+  ensureReminderPermissions,
+  syncLocalReminders,
+} from '@/lib/localReminders';
 
 type ThemeColors = (typeof Colors)['light'] | (typeof Colors)['dark'];
 
@@ -130,15 +134,33 @@ export default function SettingsScreen() {
   useFocusEffect(useCallback(() => { loadSecurity(); }, [loadSecurity]));
 
   useEffect(() => {
-    void AsyncStorage.getItem(PUSH_NOTIFICATIONS_KEY).then((v) => {
-      if (v === null) return;
-      setPushNotifications(v !== '0' && v !== 'false');
-    });
+    void areRemindersEnabled().then(setPushNotifications);
   }, []);
 
   const togglePushNotifications = async (value: boolean) => {
+    if (value) {
+      const ok = await ensureReminderPermissions();
+      if (!ok) {
+        showAlert({
+          title: t('settings.notifications'),
+          message: t('settings.notificationsPermissionDenied', {
+            defaultValue: 'Enable notifications in system settings to get loan and salary reminders.',
+          }),
+          tone: 'warning',
+        });
+        setPushNotifications(false);
+        await setRemindersEnabled(false);
+        return;
+      }
+    }
     setPushNotifications(value);
-    await AsyncStorage.setItem(PUSH_NOTIFICATIONS_KEY, value ? '1' : '0');
+    await setRemindersEnabled(value);
+    if (value) {
+      void syncLocalReminders({
+        language: i18n.language || user?.language,
+        salaryDay: user?.salaryDay,
+      });
+    }
   };
 
   const currentLang = normalizeLanguage(i18n.language);
@@ -633,6 +655,9 @@ export default function SettingsScreen() {
         <SettingsMenuRow
           icon="notifications-outline"
           label={t('settings.pushNotifications')}
+          subtitle={t('settings.remindersHint', {
+            defaultValue: 'Loan due dates and salary day',
+          })}
           last
           {...rowTheme}
           right={
@@ -696,32 +721,16 @@ export default function SettingsScreen() {
         />
       </Section>
 
-      {/* Delete account */}
-      <Pressable
-        onPress={handleDeleteAccount}
-        style={({ pressed }) => [
-          styles.deleteCard,
-          {
-            borderColor: Brand.danger,
-            backgroundColor: `${Brand.danger}12`,
-          },
-          pressed && styles.pressed,
-        ]}>
-        <RTLRow gap={12} style={styles.deleteInner}>
-          <View style={[styles.deleteIcon, { backgroundColor: `${Brand.danger}18` }]}>
-            <Ionicons name="trash-outline" size={18} color={Brand.danger} />
-          </View>
-          <View style={styles.deleteCopy}>
-            <AppText variant="body" color={Brand.danger} style={styles.deleteTitle}>
-              {t('settings.deleteAccount')}
-            </AppText>
-            <AppText variant="caption" color={colors.muted} numberOfLines={2}>
-              {t('settings.deleteAccountSubtitle')}
-            </AppText>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Brand.danger} />
-        </RTLRow>
-      </Pressable>
+      <Section title={t('settings.account')} colors={colors}>
+        <SettingsMenuRow
+          icon="trash-outline"
+          label={t('settings.deleteAccount')}
+          subtitle={t('settings.deleteAccountSubtitle')}
+          onPress={handleDeleteAccount}
+          last
+          {...rowTheme}
+        />
+      </Section>
 
       {/* Footer */}
       <View style={styles.footer}>
@@ -1070,25 +1079,6 @@ const styles = StyleSheet.create({
   },
   pinHint: { marginBottom: 8 },
   pinFieldLabel: { marginTop: 14, marginBottom: 8 },
-  deleteCard: {
-    marginHorizontal: Spacing.md,
-    marginTop: 4,
-    marginBottom: 24,
-    borderRadius: Radius.lg,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  deleteInner: { alignItems: 'center' },
-  deleteIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteCopy: { flex: 1, minWidth: 0, gap: 2 },
-  deleteTitle: { fontWeight: '600' },
   footer: {
     alignItems: 'center',
     gap: 6,

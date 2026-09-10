@@ -460,6 +460,16 @@
     "ledger": "Ledger",
     "hasReceipt": "Receipt"
   },
+  "onboarding": {
+    "skip": "Skip",
+    "getStarted": "Get started",
+    "cashflowTitle": "Track money in and out",
+    "cashflowBody": "Log expenses, income, and savings in seconds — see your month at a glance.",
+    "loansTitle": "Never lose a loan",
+    "loansBody": "Keep a clear ledger for money you lent or borrowed, with reminders and WhatsApp share.",
+    "safeTitle": "Private and backed up",
+    "safeBody": "Lock the app with PIN or biometrics, and back up to Google Drive when you want."
+  },
   "goals": {
     "title": "Savings Goals",
     "addGoal": "New Goal",
@@ -581,7 +591,9 @@
     "themeSystem": "System",
     "backup": "Backup & Data",
     "notifications": "Notifications",
-    "pushNotifications": "Push Notifications",
+    "pushNotifications": "Loan & salary reminders",
+    "remindersHint": "Due loans and salary day nudges on this device",
+    "notificationsPermissionDenied": "Enable notifications in system settings to get loan and salary reminders.",
     "emailNotifications": "Email Notifications",
     "emailNotificationsSubtitle": "Tips and account updates",
     "preferences": "Preferences",
