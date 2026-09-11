@@ -20,3 +20,6 @@ playstore/assets/screenshots/archive-*/
 playstore/assets/*source*.png
 playstore/assets/App Icon*.png
 mobile/assets/images/_icon-preview-check.png
+
+# Local WhatsApp screenshot dumps
+/WhatsApp Unknown*/
