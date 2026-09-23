@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { AuthScreen } from '@/components/AuthScreen';
 import { TextField } from '@/components/TextField';
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
+import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { Brand } from '@/constants/theme';
 
 export default function RegisterScreen() {
@@ -72,6 +73,7 @@ export default function RegisterScreen() {
         </View>
       }>
 
+      <AppleSignInButton />
       <GoogleSignInButton />
 
       <Link href="/(auth)/otp?purpose=register" asChild>

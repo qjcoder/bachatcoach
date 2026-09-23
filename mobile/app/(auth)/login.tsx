@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { AuthScreen } from '@/components/AuthScreen';
 import { TextField } from '@/components/TextField';
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
+import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { Brand } from '@/constants/theme';
 
 const DEMO_EMAIL = 'demo@bachatcoach.app';
@@ -79,6 +80,7 @@ export default function LoginScreen() {
         </View>
       }>
 
+      <AppleSignInButton />
       <GoogleSignInButton />
 
       <Link href="/(auth)/otp?purpose=login" asChild>

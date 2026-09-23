@@ -34,6 +34,8 @@
     "welcome": "بچت کوچ میں خوش آمدید",
     "subtitle": "آپ کا ذاتی بچت کوچ",
     "continueWithGoogle": "Google سے جاری رکھیں",
+    "continueWithApple": "Apple سے جاری رکھیں",
+    "appleFailed": "Apple سائن اِن ناکام",
     "orEmail": "یا ای میل",
     "signInWithEmailCode": "ای میل کوڈ سے سائن ان",
     "createWithEmailCode": "ای میل کوڈ سے اکاؤنٹ بنائیں",

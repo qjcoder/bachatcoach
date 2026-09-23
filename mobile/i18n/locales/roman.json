@@ -34,6 +34,8 @@
     "welcome": "BachatCoach mein khush amdeed",
     "subtitle": "Aap ka zaati bachat coach",
     "continueWithGoogle": "Google se jari rakhein",
+    "continueWithApple": "Apple se jari rakhein",
+    "appleFailed": "Apple sign-in fail hua",
     "orEmail": "ya email",
     "signInWithEmailCode": "Email code se sign in",
     "createWithEmailCode": "Email code se account banayein",

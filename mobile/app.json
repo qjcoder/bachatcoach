@@ -2,7 +2,7 @@
   "expo": {
     "name": "BachatCoach",
     "slug": "bachatcoach",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": [
@@ -15,6 +15,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.bachatcoach.app",
       "buildNumber": "23",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -83,6 +84,7 @@
       ],
       "expo-sharing",
       "expo-web-browser",
+      "expo-apple-authentication",
       [
         "expo-notifications",
         {

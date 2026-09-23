@@ -50,6 +50,7 @@ function userResponse(user) {
     salaryDay: user.salaryDay,
     avatar: user.avatar || '',
     googleLinked: Boolean(user.googleId),
+    appleLinked: Boolean(user.appleId),
     backupEnabled: Boolean(user.backupEnabled),
     backupFrequency: user.backupFrequency || 'off',
     lastBackupAt: user.lastBackupAt || null,
@@ -211,6 +212,99 @@ router.post('/google', async (req, res, next) => {
   } catch (err) {
     if (err?.message?.includes('Wrong number of segments') || err?.message?.includes('Token used too early')) {
       return res.status(401).json({ message: 'Invalid Google token' });
+    }
+    next(err);
+  }
+});
+
+router.post('/apple', async (req, res, next) => {
+  try {
+    const { identityToken, fullName, language, currency } = req.body;
+    if (!identityToken) {
+      return res.status(400).json({ message: 'Apple identityToken is required' });
+    }
+
+    const { createRemoteJWKSet, jwtVerify } = await import('jose');
+    const appleAud =
+      process.env.APPLE_CLIENT_ID ||
+      process.env.APPLE_BUNDLE_ID ||
+      'com.bachatcoach.app';
+    const JWKS = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
+
+    let payload;
+    try {
+      const verified = await jwtVerify(identityToken, JWKS, {
+        issuer: 'https://appleid.apple.com',
+        audience: appleAud,
+      });
+      payload = verified.payload;
+    } catch (err) {
+      // Some builds use the Services ID; retry without strict audience if configured.
+      const altAud = process.env.APPLE_SERVICES_ID;
+      if (altAud && altAud !== appleAud) {
+        const verified = await jwtVerify(identityToken, JWKS, {
+          issuer: 'https://appleid.apple.com',
+          audience: altAud,
+        });
+        payload = verified.payload;
+      } else {
+        throw err;
+      }
+    }
+
+    const appleId = payload?.sub ? String(payload.sub) : '';
+    if (!appleId) {
+      return res.status(401).json({ message: 'Invalid Apple token' });
+    }
+
+    const emailFromToken = payload.email ? String(payload.email).toLowerCase() : '';
+    const given =
+      fullName && typeof fullName === 'object'
+        ? [fullName.givenName, fullName.familyName].filter(Boolean).join(' ').trim()
+        : '';
+
+    let user = await User.findOne({ appleId });
+    if (!user && emailFromToken) {
+      user = await User.findOne({ email: emailFromToken });
+    }
+
+    if (user) {
+      if (!user.appleId) user.appleId = appleId;
+      if (given && (!user.name || user.name === user.email.split('@')[0])) user.name = given;
+      await user.save();
+    } else {
+      // First Apple sign-in should include email; fall back to a stable placeholder.
+      const email = emailFromToken || `apple_${appleId.slice(0, 12)}@privaterelay.appleid.local`;
+      const name = given || (emailFromToken ? emailFromToken.split('@')[0] : 'Apple User');
+      user = await User.create({
+        name,
+        email,
+        appleId,
+        password: randomUnusedPassword(),
+        language: language || 'en',
+        currency: currency ? String(currency).toUpperCase() : 'PKR',
+      });
+    }
+
+    const resolved = await finalizeSignIn(user);
+    if (resolved.purged || !resolved.user) {
+      return res.status(401).json({ message: 'No account found for this Apple sign-in' });
+    }
+
+    const token = signToken(resolved.user._id);
+    res.json({
+      token,
+      user: userResponse(resolved.user),
+      restoredFromDeletion: resolved.restored,
+    });
+  } catch (err) {
+    if (
+      err?.code === 'ERR_JWT_CLAIM_VALIDATION_FAILED' ||
+      err?.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED' ||
+      err?.code === 'ERR_JWT_EXPIRED' ||
+      String(err?.message || '').toLowerCase().includes('jwt')
+    ) {
+      return res.status(401).json({ message: 'Invalid Apple token' });
     }
     next(err);
   }

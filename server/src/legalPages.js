@@ -46,7 +46,7 @@ export const PRIVACY_HTML = page(
   <p>BachatCoach ("we", "our", "the app") is a personal finance management application. This Privacy Policy explains how we collect, use, and protect your information.</p>
 
   <h2>Information We Collect</h2>
-  <p><strong>Account information:</strong> name, email address, and password (hashed; never stored in plain text). If you use Google Sign-In, we receive your Google account ID, name, email, and profile photo from Google.</p>
+  <p><strong>Account information:</strong> name, email address, and password (hashed; never stored in plain text). If you use Google Sign-In or Sign in with Apple, we receive your account ID, name, and email from that provider (Apple may provide a private relay email).</p>
   <p><strong>Financial data:</strong> expense and income transactions, loan/contact records (names, optional phone numbers, amounts), savings goals, categories, payment methods, and optional notes or receipt references.</p>
   <p><strong>Device data (stored on your device):</strong> PIN lock (SecureStore), biometric unlock preference, and language preference. PIN codes never leave your device.</p>
   <p>We do <strong>not</strong> collect bank credentials, SMS/call logs, precise location, or advertising identifiers.</p>
@@ -61,8 +61,8 @@ export const PRIVACY_HTML = page(
   </ul>
   <p>We do <strong>not</strong> sell your data to third parties.</p>
 
-  <h2>Google Sign-In &amp; Google Drive</h2>
-  <p>If you choose Google Sign-In, authentication is handled by Google. If you enable Google Drive backup or receipt storage, the app uses Google's <code>drive.file</code> scope to create and manage files <strong>you</strong> create through BachatCoach in your own Drive. We do not request full Drive access.</p>
+  <h2>Google Sign-In, Sign in with Apple &amp; Google Drive</h2>
+  <p>If you choose Google Sign-In or Sign in with Apple, authentication is handled by that provider. If you enable Google Drive backup or receipt storage, the app uses Google's <code>drive.file</code> scope to create and manage files <strong>you</strong> create through BachatCoach in your own Drive. We do not request full Drive access.</p>
 
   <h2>Data Storage &amp; Security</h2>
   <ul>

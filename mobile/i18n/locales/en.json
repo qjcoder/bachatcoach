@@ -34,6 +34,8 @@
     "welcome": "Welcome to BachatCoach",
     "subtitle": "Your personal savings coach",
     "continueWithGoogle": "Continue with Google",
+    "continueWithApple": "Continue with Apple",
+    "appleFailed": "Apple sign-in failed",
     "orEmail": "or email",
     "signInWithEmailCode": "Sign in with email code",
     "createWithEmailCode": "Create account with email code",

@@ -21,6 +21,7 @@ type User = {
   salaryDay: number;
   avatar?: string;
   googleLinked?: boolean;
+  appleLinked?: boolean;
   backupEnabled?: boolean;
   backupFrequency?: BackupFrequency;
   lastBackupAt?: string | null;
@@ -33,6 +34,10 @@ type AuthContextType = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  loginWithApple: (
+    identityToken: string,
+    fullName?: { givenName?: string | null; familyName?: string | null } | null
+  ) => Promise<void>;
   sendEmailOtp: (email: string, purpose: 'login' | 'register') => Promise<{ message: string; retryAfterSec?: number; devCode?: string }>;
   loginWithEmailOtp: (params: {
     email: string;
@@ -154,6 +159,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persistSession(data.token, data.user, data.restoredFromDeletion);
   };
 
+  const loginWithApple = async (
+    identityToken: string,
+    fullName?: { givenName?: string | null; familyName?: string | null } | null
+  ) => {
+    const language = user?.language;
+    const currency = language ? getDefaultCurrencyForLanguage(language) : undefined;
+    const { data } = await api.post('/auth/apple', {
+      identityToken,
+      fullName: fullName
+        ? { givenName: fullName.givenName || undefined, familyName: fullName.familyName || undefined }
+        : undefined,
+      language,
+      currency,
+    });
+    await persistSession(data.token, data.user, data.restoredFromDeletion);
+  };
+
   const sendEmailOtp = async (email: string, purpose: 'login' | 'register') => {
     const { data } = await api.post('/auth/otp/send', {
       email: email.trim().toLowerCase(),
@@ -245,6 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         loginWithGoogle,
+        loginWithApple,
         sendEmailOtp,
         loginWithEmailOtp,
         register,

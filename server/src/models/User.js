@@ -13,10 +13,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       minlength: 6,
       required: function passwordRequired() {
-        return !this.googleId;
+        return !this.googleId && !this.appleId;
       },
     },
     googleId: { type: String, unique: true, sparse: true, trim: true },
+    appleId: { type: String, unique: true, sparse: true, trim: true },
     language: { type: String, default: 'en', trim: true, maxlength: 12 },
     currency: { type: String, default: 'PKR' },
     salaryDay: { type: Number, min: 1, max: 31, default: 1 },
@@ -44,7 +45,7 @@ userSchema.methods.comparePassword = function comparePassword(candidate) {
   return bcrypt.compare(candidate, this.password);
 };
 
-/** Random password for Google/OTP-only accounts (never used for login). */
+/** Random password for Google/Apple/OTP-only accounts (never used for login). */
 export function randomUnusedPassword() {
   return crypto.randomBytes(32).toString('hex');
 }
