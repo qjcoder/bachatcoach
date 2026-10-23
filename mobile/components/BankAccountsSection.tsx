@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '@/lib/api';
+import { formatAmount } from '@/lib/format';
 import { useDialog } from '@/context/DialogContext';
 import { AppText } from '@/components/AppText';
 import { SettingsMenuRow } from '@/components/SettingsMenuRow';
@@ -26,7 +27,16 @@ import { useColorScheme } from '@/components/useColorScheme';
 type BankAccount = {
   _id: string;
   name: string;
+  balance?: number;
 };
+
+function parseBankAccountsResponse(data: unknown): BankAccount[] {
+  if (Array.isArray(data)) return data as BankAccount[];
+  if (data && typeof data === 'object' && Array.isArray((data as { accounts?: unknown }).accounts)) {
+    return (data as { accounts: BankAccount[] }).accounts;
+  }
+  return [];
+}
 
 type RowTheme = {
   textColor: string;
@@ -60,7 +70,7 @@ export function BankAccountsMenuRow({ rowTheme, currencyCode = 'PKR', last }: Pr
     setLoading(true);
     try {
       const { data } = await api.get('/bank-accounts');
-      setAccounts(Array.isArray(data) ? data : []);
+      setAccounts(parseBankAccountsResponse(data));
     } catch {
       /* keep last list */
     } finally {
@@ -188,9 +198,14 @@ export function BankAccountsMenuRow({ rowTheme, currencyCode = 'PKR', last }: Pr
             style={[styles.accountRow, { borderColor: rowTheme.borderColor }]}>
             <RTLRow gap={10} style={{ alignItems: 'center', flex: 1 }}>
               <BankLogo name={account.name} size={32} />
-              <AppText variant="bodySemibold" color={rowTheme.textColor} style={{ flex: 1 }} numberOfLines={2}>
-                {account.name}
-              </AppText>
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodySemibold" color={rowTheme.textColor} numberOfLines={1}>
+                  {account.name}
+                </AppText>
+                <AppText variant="caption" color={rowTheme.mutedColor} numberOfLines={1}>
+                  {t('banks.available')} {formatAmount(Number(account.balance) || 0)}
+                </AppText>
+              </View>
             </RTLRow>
             <Pressable onPress={() => remove(account)} hitSlop={10} style={styles.removeBtn}>
               <Ionicons name="trash-outline" size={18} color={Brand.danger} />

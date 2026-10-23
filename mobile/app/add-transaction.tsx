@@ -37,7 +37,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getCurrency } from '@/constants/currencies';
 import { useGoogleDriveConnect } from '@/lib/googleAuth';
 import { uploadReceiptToDrive } from '@/lib/googleDrive';
-import { formatAmount, formatTransactionTime } from '@/lib/format';
+import { formatAmount, formatCompactAmount, formatTransactionTime } from '@/lib/format';
 import { localeForLanguage, scriptLanguage } from '@/lib/language';
 import { getDailyQuote } from '@/lib/dailyQuotes';
 import { currentMonthSummaryParams } from '@/lib/transactionPeriod';
@@ -96,6 +96,25 @@ function normalizePaymentMethod(raw?: string) {
 
 function firstParam(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+type BankAccountRow = { _id: string; name: string; balance?: number };
+
+function parseBankAccountsPayload(data: unknown): {
+  accounts: BankAccountRow[];
+  cashBalance: number;
+} {
+  if (Array.isArray(data)) {
+    return { accounts: data as BankAccountRow[], cashBalance: 0 };
+  }
+  if (data && typeof data === 'object') {
+    const obj = data as { accounts?: BankAccountRow[]; cashBalance?: number };
+    return {
+      accounts: Array.isArray(obj.accounts) ? obj.accounts : [],
+      cashBalance: Number(obj.cashBalance) || 0,
+    };
+  }
+  return { accounts: [], cashBalance: 0 };
 }
 
 type TxnType = 'expense' | 'income' | 'savings';
@@ -211,7 +230,9 @@ export default function AddTransactionScreen() {
   const [payOpen, setPayOpen] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
   const [incomeDestOpen, setIncomeDestOpen] = useState(false);
-  const [bankAccounts, setBankAccounts] = useState<Array<{ _id: string; name: string }>>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountRow[]>([]);
+  const [cashBalance, setCashBalance] = useState(0);
+  const [categorySpend, setCategorySpend] = useState<Record<string, number>>({});
   const [bankAccountId, setBankAccountId] = useState(firstParam(params.bankAccount) || '');
 
   const handleReceiptDenied = useCallback(
@@ -369,37 +390,40 @@ export default function AddTransactionScreen() {
   }, [paramType]);
 
   useEffect(() => {
-    if (!isSavings) return;
     let cancelled = false;
-    api
-      .get('/dashboard/summary', {
-        params: { lang: i18n.language, ...currentMonthSummaryParams() },
-      })
-      .then(({ data }) => {
-        if (!cancelled) setMonthIncome(Number(data?.income) || 0);
+    const summaryParams = { lang: i18n.language, ...currentMonthSummaryParams() };
+    Promise.all([
+      api.get('/dashboard/summary', { params: summaryParams }),
+      api.get('/bank-accounts'),
+    ])
+      .then(([summaryRes, banksRes]) => {
+        if (cancelled) return;
+        const summary = summaryRes.data || {};
+        setMonthIncome(Number(summary.income) || 0);
+        const rows: Array<{ _id: string; total: number }> = isIncome
+          ? summary.incomeCategoryBreakdown || []
+          : summary.categoryBreakdown || [];
+        const map: Record<string, number> = {};
+        for (const row of rows) {
+          const key = row._id === 'personal' ? 'other' : row._id;
+          map[key] = (map[key] || 0) + (Number(row.total) || 0);
+        }
+        setCategorySpend(map);
+        const parsed = parseBankAccountsPayload(banksRes.data);
+        setBankAccounts(parsed.accounts);
+        setCashBalance(parsed.cashBalance);
       })
       .catch(() => {
-        if (!cancelled) setMonthIncome(0);
+        if (cancelled) return;
+        if (isSavings) setMonthIncome(0);
+        setCategorySpend({});
+        setBankAccounts([]);
+        setCashBalance(0);
       });
     return () => {
       cancelled = true;
     };
-  }, [isSavings, i18n.language]);
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .get('/bank-accounts')
-      .then(({ data }) => {
-        if (!cancelled) setBankAccounts(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        if (!cancelled) setBankAccounts([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [isSavings, isIncome, i18n.language]);
 
   useEffect(() => {
     if (paymentMethod !== 'bank') {
@@ -791,6 +815,7 @@ export default function AddTransactionScreen() {
               {categories.map((cat) => {
                 const selected = category === cat;
                 const color = CATEGORY_COLORS[cat] || accent;
+                const spent = categorySpend[cat] || 0;
                 return (
                   <Pressable
                     key={cat}
@@ -823,6 +848,14 @@ export default function AddTransactionScreen() {
                       numberOfLines={1}
                       style={styles.catLabel}>
                       {t(`categoriesShort.${cat}`, { defaultValue: t(`categories.${cat}`) })}
+                    </AppText>
+                    <AppText
+                      variant="caption"
+                      color={selected ? accent : muted}
+                      align="center"
+                      numberOfLines={1}
+                      style={styles.catSpend}>
+                      {currency.symbol} {formatCompactAmount(spent, i18n.language)}
                     </AppText>
                   </Pressable>
                 );
@@ -1269,6 +1302,10 @@ export default function AddTransactionScreen() {
           </RTLRow>
           {PAYMENT_METHODS.map((method) => {
             const selected = paymentMethod === method;
+            const methodBalance =
+              method === 'cash'
+                ? cashBalance
+                : bankAccounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
             return (
               <Pressable
                 key={method}
@@ -1293,9 +1330,15 @@ export default function AddTransactionScreen() {
                   selected && { borderColor: accent, backgroundColor: `${accent}14` },
                 ]}>
                 <Ionicons name={PAYMENT_ICONS[method]} size={18} color={selected ? accent : muted} />
-                <AppText variant="bodySemibold" color={selected ? text : muted} style={{ flex: 1 }}>
-                  {t(`paymentMethods.${method}`)}
-                </AppText>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="bodySemibold" color={selected ? text : muted}>
+                    {t(`paymentMethods.${method}`)}
+                  </AppText>
+                  <AppText variant="caption" color={muted}>
+                    {t('banks.available', { defaultValue: 'Available' })}{' '}
+                    {currency.symbol} {formatAmount(methodBalance, i18n.language)}
+                  </AppText>
+                </View>
                 {selected ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
               </Pressable>
             );
@@ -1320,6 +1363,7 @@ export default function AddTransactionScreen() {
           </RTLRow>
           {bankAccounts.map((account) => {
             const selected = bankAccountId === account._id;
+            const bal = Number(account.balance) || 0;
             return (
               <Pressable
                 key={account._id}
@@ -1333,9 +1377,15 @@ export default function AddTransactionScreen() {
                   selected && { borderColor: accent, backgroundColor: `${accent}14` },
                 ]}>
                 <BankLogo name={account.name} size={28} />
-                <AppText variant="bodySemibold" color={selected ? text : muted} style={{ flex: 1 }}>
-                  {account.name}
-                </AppText>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="bodySemibold" color={selected ? text : muted}>
+                    {account.name}
+                  </AppText>
+                  <AppText variant="caption" color={muted}>
+                    {t('banks.available', { defaultValue: 'Available' })}{' '}
+                    {currency.symbol} {formatAmount(bal, i18n.language)}
+                  </AppText>
+                </View>
                 {selected ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
               </Pressable>
             );
@@ -1374,12 +1424,17 @@ export default function AddTransactionScreen() {
               paymentMethod === 'cash' && { borderColor: accent, backgroundColor: `${accent}14` },
             ]}>
             <BankLogo name="Cash" size={28} cash />
-            <AppText
-              variant="bodySemibold"
-              color={paymentMethod === 'cash' ? text : muted}
-              style={{ flex: 1 }}>
-              {t('paymentMethods.cash')}
-            </AppText>
+            <View style={{ flex: 1 }}>
+              <AppText
+                variant="bodySemibold"
+                color={paymentMethod === 'cash' ? text : muted}>
+                {t('paymentMethods.cash')}
+              </AppText>
+              <AppText variant="caption" color={muted}>
+                {t('banks.available', { defaultValue: 'Available' })}{' '}
+                {currency.symbol} {formatAmount(cashBalance, i18n.language)}
+              </AppText>
+            </View>
             {paymentMethod === 'cash' ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
           </Pressable>
           {bankAccounts.length === 0 ? (
@@ -1389,6 +1444,7 @@ export default function AddTransactionScreen() {
           ) : (
             bankAccounts.map((account) => {
               const selected = paymentMethod === 'bank' && bankAccountId === account._id;
+              const bal = Number(account.balance) || 0;
               return (
                 <Pressable
                   key={account._id}
@@ -1403,9 +1459,15 @@ export default function AddTransactionScreen() {
                     selected && { borderColor: accent, backgroundColor: `${accent}14` },
                   ]}>
                   <BankLogo name={account.name} size={28} />
-                  <AppText variant="bodySemibold" color={selected ? text : muted} style={{ flex: 1 }}>
-                    {account.name}
-                  </AppText>
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="bodySemibold" color={selected ? text : muted}>
+                      {account.name}
+                    </AppText>
+                    <AppText variant="caption" color={muted}>
+                      {t('banks.available', { defaultValue: 'Available' })}{' '}
+                      {currency.symbol} {formatAmount(bal, i18n.language)}
+                    </AppText>
+                  </View>
                   {selected ? <Ionicons name="checkmark-circle" size={18} color={accent} /> : null}
                 </Pressable>
               );
@@ -1607,6 +1669,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   catLabel: { fontSize: 11, lineHeight: 13, width: '100%', fontWeight: '700' },
+  catSpend: { fontSize: 9, lineHeight: 11, width: '100%', marginTop: 1, opacity: 0.9 },
   billChipRow: {
     flexDirection: 'row',
     alignItems: 'center',

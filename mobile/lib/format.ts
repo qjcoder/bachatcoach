@@ -27,6 +27,23 @@ export function formatAmount(amount: number, locale?: string) {
   return new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(amount);
 }
 
+/** Compact amount for category tiles / pickers (e.g. 12.5k, 1.2L). */
+export function formatCompactAmount(amount: number, locale?: string) {
+  const n = Number(amount) || 0;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  const lang = normalizeLanguage(locale);
+  if (abs >= 100_000) {
+    const val = abs / 100_000;
+    return `${sign}${val >= 10 ? val.toFixed(0) : val.toFixed(1)}L`;
+  }
+  if (abs >= 1000) {
+    const val = abs / 1000;
+    return `${sign}${val >= 10 ? val.toFixed(0) : val.toFixed(1)}k`;
+  }
+  return `${sign}${formatAmount(abs, lang)}`;
+}
+
 /** @deprecated Use formatMoney */
 export function formatPKR(amount: number, locale?: string) {
   return formatMoney(amount, 'PKR', locale);

@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import BankAccount from '../models/BankAccount.js';
 import Transaction from '../models/Transaction.js';
 import { auth } from '../middleware/auth.js';
@@ -10,10 +11,59 @@ function normalizeName(value) {
   return typeof value === 'string' ? value.trim().slice(0, 80) : '';
 }
 
+/** Income adds; expense + savings subtract. */
+function signedAmountExpr() {
+  return {
+    $cond: [
+      { $eq: ['$type', 'income'] },
+      '$amount',
+      { $multiply: ['$amount', -1] },
+    ],
+  };
+}
+
+async function paymentBalances(userId) {
+  const userOid = new mongoose.Types.ObjectId(userId);
+  const [cashRow, bankRows] = await Promise.all([
+    Transaction.aggregate([
+      { $match: { user: userOid, paymentMethod: 'cash' } },
+      { $group: { _id: null, balance: { $sum: signedAmountExpr() } } },
+    ]),
+    Transaction.aggregate([
+      {
+        $match: {
+          user: userOid,
+          paymentMethod: 'bank',
+          bankAccount: { $ne: null },
+        },
+      },
+      { $group: { _id: '$bankAccount', balance: { $sum: signedAmountExpr() } } },
+    ]),
+  ]);
+
+  const byAccount = new Map(
+    bankRows.map((row) => [String(row._id), Number(row.balance) || 0])
+  );
+  return {
+    cashBalance: Number(cashRow[0]?.balance) || 0,
+    byAccount,
+  };
+}
+
 router.get('/', async (req, res, next) => {
   try {
-    const accounts = await BankAccount.find({ user: req.userId }).sort({ name: 1 }).lean();
-    res.json(accounts);
+    const [accounts, balances] = await Promise.all([
+      BankAccount.find({ user: req.userId }).sort({ name: 1 }).lean(),
+      paymentBalances(req.userId),
+    ]);
+
+    res.json({
+      cashBalance: balances.cashBalance,
+      accounts: accounts.map((account) => ({
+        ...account,
+        balance: balances.byAccount.get(String(account._id)) || 0,
+      })),
+    });
   } catch (err) {
     next(err);
   }
@@ -28,7 +78,7 @@ router.post('/', async (req, res, next) => {
       user: req.userId,
       name,
     });
-    res.status(201).json(account);
+    res.status(201).json({ ...account.toObject(), balance: 0 });
   } catch (err) {
     if (err?.code === 11000) {
       return res.status(400).json({ message: 'You already have an account with this name' });
