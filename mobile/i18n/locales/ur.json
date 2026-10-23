@@ -100,8 +100,9 @@
   "dashboard": {
     "greeting": "السلام علیکم",
     "greetingSubtitle": "چھوٹے قدم۔ بڑی مالی آزادی۔",
-    "savedThisMonth": "اس ماہ کی بچت",
-    "totalSavedOverall": "کل بچت",
+    "savedThisMonth": "اس ماہ باقی رقم",
+    "totalSavedOverall": "کل باقی رقم",
+    "remainingHint": "باقی رقم خرچ کے بعد بچا نقد ہے۔ بچت وہ ہے جو آپ نے الگ منتقل کی۔",
     "scopeOverall": "کل",
     "scopeThisMonth": "اس ماہ",
     "allTime": "تمام وقت",

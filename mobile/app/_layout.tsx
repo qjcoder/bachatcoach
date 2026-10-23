@@ -1,9 +1,17 @@
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
+import { InteractionManager, LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
+
+// Mismatched store/dev binaries may lack optional native modules; don't redbox the app.
+LogBox.ignoreLogs([
+  "Cannot find native module 'ExpoClipboard'",
+  "Cannot find native module 'ExpoPushTokenManager'",
+  'expo-notifications: Android Push notifications',
+]);
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { DialogProvider } from '@/context/DialogContext';
@@ -97,10 +105,13 @@ function ReminderSync() {
 
   useEffect(() => {
     if (!user) return;
-    void syncLocalReminders({
-      language: i18n.language || user.language,
-      salaryDay: user.salaryDay,
+    const task = InteractionManager.runAfterInteractions(() => {
+      void syncLocalReminders({
+        language: i18n.language || user.language,
+        salaryDay: user.salaryDay,
+      });
     });
+    return () => task.cancel();
   }, [user?.id, user?.salaryDay, i18n.language]);
 
   return null;

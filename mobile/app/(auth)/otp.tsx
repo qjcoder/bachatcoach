@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Pressable, View, Platform } from 'react-native';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
+import { getClipboardString } from '@/lib/clipboard';
 import { normalizeLanguage } from '@/lib/language';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -104,7 +104,7 @@ export default function EmailOtpScreen() {
 
   const handlePasteCode = useCallback(async () => {
     try {
-      const clip = await Clipboard.getStringAsync();
+      const clip = await getClipboardString();
       const extracted = extractOtp(clip || '');
       if (!extracted) {
         showAlert({

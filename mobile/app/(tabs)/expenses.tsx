@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -23,7 +23,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import api, { peekApiCache } from '@/lib/api';
+import api, { peekApiCache, subscribeApiCacheKey } from '@/lib/api';
 import { getCategoryLabel } from '@/lib/category';
 import { useFormatPKR, formatAmount, formatTransactionDate, formatTransactionTime } from '@/lib/format';
 import { getCurrency } from '@/constants/currencies';
@@ -53,9 +53,22 @@ import { localeForLanguage } from '@/lib/language';
 import type { MonthlyReportRow } from '@/lib/monthlyReportPdf';
 import { resolveMoneyKind, moneyKindColor } from '@/lib/txnKind';
 
-type FlowMode = 'expense' | 'income' | 'savings';
+type FlowMode = 'all' | 'expense' | 'income' | 'savings';
 type MetricMode = 'amount' | 'count';
 type MonthBar = { month: number; year: number; label: string; value: number };
+
+const FLOW_ACCENT: Record<FlowMode, string> = {
+  all: Brand.primary,
+  expense: TxnKind.expense,
+  income: TxnKind.income,
+  savings: TxnKind.savings,
+};
+const FLOW_SOFT: Record<FlowMode, string> = {
+  all: '#6EE7B7',
+  expense: TxnKindSoft.expense,
+  income: TxnKindSoft.income,
+  savings: TxnKindSoft.savings,
+};
 
 type Transaction = {
   _id: string;
@@ -82,6 +95,7 @@ type DashboardSummary = {
     toSavings?: number;
     incomePct?: number;
     expensesPct?: number;
+    savedPct?: number;
   };
   categoryBreakdown?: Array<{ _id: string; total: number }>;
   incomeCategoryBreakdown?: Array<{ _id: string; total: number }>;
@@ -89,6 +103,33 @@ type DashboardSummary = {
 
 function isSavingsTxn(item: Pick<Transaction, 'type' | 'category'>) {
   return item.type === 'savings' || (item.type === 'expense' && item.category === 'savings');
+}
+
+function filterByFlowMode(all: Transaction[], kind: FlowMode): Transaction[] {
+  if (kind === 'all') return all;
+  if (kind === 'savings') return all.filter(isSavingsTxn);
+  if (kind === 'income') return all.filter((item) => item.type === 'income');
+  return all.filter((item) => item.type === 'expense' && !isSavingsTxn(item));
+}
+
+function periodQueryParams(activePeriod: TransactionPeriod, month: number, year: number) {
+  const { from, to } =
+    activePeriod === 'month' ? monthBounds(month, year) : getTransactionPeriodRange(activePeriod);
+  return { from, to, limit: periodFetchLimit(activePeriod) };
+}
+
+function overviewSummaryParams(lang: string, month: number, year: number) {
+  const { from, to } = monthBounds(month, year);
+  const prev = previousMonthBounds(month, year);
+  return {
+    lang,
+    month,
+    year,
+    from,
+    to,
+    prevFrom: prev.from,
+    prevTo: prev.to,
+  };
 }
 
 function txnTint(item: Pick<Transaction, 'type' | 'category'>) {
@@ -139,7 +180,7 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   other_income: 'add-circle-outline',
 };
 
-const PERIOD_TABS: TransactionPeriod[] = ['today', 'week', 'month', 'year'];
+const PERIOD_TABS: TransactionPeriod[] = ['today', 'week', 'month', 'year', 'all'];
 
 function lastSevenMonthBars(
   months: Array<MonthlyReportRow & { year: number }>,
@@ -156,11 +197,13 @@ function lastSevenMonthBars(
     const row = months.find((r) => r.month === m && r.year === y);
     const label = d.toLocaleString(locale, { month: 'short' });
     const value =
-      kind === 'income'
-        ? row?.income ?? 0
-        : kind === 'savings'
-          ? row?.toSavings ?? 0
-          : row?.expenses ?? 0;
+      kind === 'all'
+        ? (row?.income ?? 0) + (row?.expenses ?? 0) + (row?.toSavings ?? 0)
+        : kind === 'income'
+          ? row?.income ?? 0
+          : kind === 'savings'
+            ? row?.toSavings ?? 0
+            : row?.expenses ?? 0;
     bars.push({ month: m, year: y, label, value });
   }
   return bars;
@@ -190,15 +233,25 @@ function MiniExpenseBars({
   const barW = Math.max(9, (width - gap * (bars.length - 1)) / bars.length);
   const maxVal = Math.max(...bars.map((b) => b.value), 1);
   const tipW = Math.min(100, Math.max(52, tipLabel.length * 6.2));
-  const tipColor = TxnKind[accent];
+  const tipColor = FLOW_ACCENT[accent];
   const activeLabel =
-    accent === 'income' ? '#A7F3D0' : accent === 'savings' ? '#FDE68A' : '#FECDD3';
+    accent === 'income'
+      ? '#A7F3D0'
+      : accent === 'savings'
+        ? '#FDE68A'
+        : accent === 'all'
+          ? '#A7F3D0'
+          : '#FECDD3';
   const mutedId = `barMuted-${accent}`;
   const hotId = `barHot-${accent}`;
-  const deep = TxnKindDeep[accent];
-  const soft = TxnKindSoft[accent];
+  const deep = accent === 'all' ? Brand.primary : TxnKindDeep[accent];
+  const soft = FLOW_SOFT[accent];
   const mutedEnd =
-    accent === 'income' ? '#064E3B' : accent === 'savings' ? '#3D2E14' : '#4C0519';
+    accent === 'income' || accent === 'all'
+      ? '#064E3B'
+      : accent === 'savings'
+        ? '#3D2E14'
+        : '#4C0519';
 
   return (
     <View style={{ width, height }}>
@@ -297,139 +350,134 @@ export default function ExpensesScreen() {
   const { showAlert, showConfirm } = useDialog();
 
   const nowInit = new Date();
-  const [flowMode, setFlowMode] = useState<FlowMode>('expense');
+  const initMonth = nowInit.getMonth() + 1;
+  const initYear = nowInit.getFullYear();
+  const [flowMode, setFlowMode] = useState<FlowMode>('all');
   const [metricMode, setMetricMode] = useState<MetricMode>('amount');
-  const [items, setItems] = useState<Transaction[]>([]);
+  /** Default: all types + all time; type/period chips narrow the list. */
+  const [period, setPeriod] = useState<TransactionPeriod>('all');
+  const [focusMonth, setFocusMonth] = useState(initMonth);
+  const [focusYear, setFocusYear] = useState(initYear);
+  /** All types for the selected period; type tabs filter this in-memory. */
+  const [periodItems, setPeriodItems] = useState<Transaction[]>(
+    () =>
+      peekApiCache<Transaction[]>('/transactions', periodQueryParams('all', initMonth, initYear)) ||
+      []
+  );
   const [monthExpenseCount, setMonthExpenseCount] = useState(0);
   const [monthIncomeCount, setMonthIncomeCount] = useState(0);
   const [monthSavingsCount, setMonthSavingsCount] = useState(0);
-  const [summary, setSummary] = useState<DashboardSummary | null>(() => {
-    const { from, to } = monthBounds(nowInit.getMonth() + 1, nowInit.getFullYear());
-    const prev = previousMonthBounds(nowInit.getMonth() + 1, nowInit.getFullYear());
-    return peekApiCache<DashboardSummary>('/dashboard/summary', {
-      lang: i18n.language,
-      month: nowInit.getMonth() + 1,
-      year: nowInit.getFullYear(),
-      from,
-      to,
-      prevFrom: prev.from,
-      prevTo: prev.to,
-    });
-  });
+  const [summary, setSummary] = useState<DashboardSummary | null>(() =>
+    peekApiCache<DashboardSummary>(
+      '/dashboard/summary',
+      overviewSummaryParams(i18n.language, initMonth, initYear)
+    )
+  );
   const [monthRows, setMonthRows] = useState<Array<MonthlyReportRow & { year: number }>>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [period, setPeriod] = useState<TransactionPeriod>('month');
-  const [focusMonth, setFocusMonth] = useState(nowInit.getMonth() + 1);
-  const [focusYear, setFocusYear] = useState(nowInit.getFullYear());
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearch = useDeferredValue(searchQuery);
   const [filterOpen, setFilterOpen] = useState(false);
   const [receiptRef, setReceiptRef] = useState<string | null>(null);
   const [selected, setSelected] = useState<Transaction | null>(null);
+  const overviewGen = useRef(0);
+  const periodGen = useRef(0);
 
+  const isAllMode = flowMode === 'all';
   const isIncomeMode = flowMode === 'income';
   const isSavingsMode = flowMode === 'savings';
-  const isExpenseMode = flowMode === 'expense';
+  const items = useMemo(() => filterByFlowMode(periodItems, flowMode), [periodItems, flowMode]);
 
-  const loadOverview = useCallback(
-    async (month: number, year: number, fresh = false) => {
-      const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
-      const { from, to } = monthBounds(month, year);
-      const prev = previousMonthBounds(month, year);
-      const tz = deviceTimeZone();
-      const currentYear = new Date().getFullYear();
-      const prevYear = currentYear - 1;
-      const needsPrevYear = new Date().getMonth() < 6;
-      const [summaryRes, monthAllRes, reportRes, prevReportRes] = await Promise.all([
-        api.get('/dashboard/summary', {
-          params: {
-            lang: i18n.language,
-            month,
-            year,
-            from,
-            to,
-            prevFrom: prev.from,
-            prevTo: prev.to,
-          },
-          headers,
-        }),
-        api.get('/transactions', {
-          params: { from, to, limit: periodFetchLimit('month') },
-          headers,
-        }),
-        api.get('/dashboard/monthly-report', { params: { year: currentYear, tz }, headers }),
-        needsPrevYear
-          ? api.get('/dashboard/monthly-report', { params: { year: prevYear, tz }, headers })
-          : Promise.resolve({ data: { months: [] as MonthlyReportRow[] } }),
-      ]);
-      const all = monthAllRes.data as Transaction[];
-      setSummary(summaryRes.data);
-      setMonthExpenseCount(all.filter((item) => item.type === 'expense' && !isSavingsTxn(item)).length);
-      setMonthIncomeCount(all.filter((item) => item.type === 'income').length);
-      setMonthSavingsCount(all.filter(isSavingsTxn).length);
-      const currentRows = ((reportRes.data?.months as MonthlyReportRow[]) || []).map((r) => ({
-        ...r,
-        year: currentYear,
-      }));
-      const priorRows = ((prevReportRes.data?.months as MonthlyReportRow[]) || []).map((r) => ({
-        ...r,
-        year: prevYear,
-      }));
-      setMonthRows([...priorRows, ...currentRows]);
-    },
-    [i18n.language]
-  );
+  const loadOverview = useCallback(async (month: number, year: number, fresh = false) => {
+    const gen = ++overviewGen.current;
+    const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
+    const summaryParams = overviewSummaryParams(i18n.language, month, year);
+    const { from, to } = monthBounds(month, year);
+    const tz = deviceTimeZone();
+    const currentYear = new Date().getFullYear();
+    const prevYear = currentYear - 1;
+    const needsPrevYear = new Date().getMonth() < 6;
+    const [summaryRes, monthAllRes, reportRes, prevReportRes] = await Promise.all([
+      api.get('/dashboard/summary', { params: summaryParams, headers }),
+      api.get('/transactions', {
+        params: { from, to, limit: periodFetchLimit('month') },
+        headers,
+      }),
+      api.get('/dashboard/monthly-report', { params: { year: currentYear, tz }, headers }),
+      needsPrevYear
+        ? api.get('/dashboard/monthly-report', { params: { year: prevYear, tz }, headers })
+        : Promise.resolve({ data: { months: [] as MonthlyReportRow[] } }),
+    ]);
+    if (gen !== overviewGen.current) return;
+    const all = monthAllRes.data as Transaction[];
+    setSummary(summaryRes.data);
+    setMonthExpenseCount(all.filter((item) => item.type === 'expense' && !isSavingsTxn(item)).length);
+    setMonthIncomeCount(all.filter((item) => item.type === 'income').length);
+    setMonthSavingsCount(all.filter(isSavingsTxn).length);
+    const currentRows = ((reportRes.data?.months as MonthlyReportRow[]) || []).map((r) => ({
+      ...r,
+      year: currentYear,
+    }));
+    const priorRows = ((prevReportRes.data?.months as MonthlyReportRow[]) || []).map((r) => ({
+      ...r,
+      year: prevYear,
+    }));
+    setMonthRows([...priorRows, ...currentRows]);
+  }, [i18n.language]);
 
   const loadPeriod = useCallback(
-    async (
-      activePeriod: TransactionPeriod,
-      kind: FlowMode,
-      month: number,
-      year: number,
-      fresh = false
-    ) => {
-      const { from, to } =
-        activePeriod === 'month'
-          ? monthBounds(month, year)
-          : getTransactionPeriodRange(activePeriod);
+    async (activePeriod: TransactionPeriod, month: number, year: number, fresh = false) => {
+      const gen = ++periodGen.current;
+      const params = periodQueryParams(activePeriod, month, year);
       const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
-      // One untyped list — filter client-side (matches prefetch + overview cache key).
-      const { data } = await api.get('/transactions', {
-        params: { from, to, limit: periodFetchLimit(activePeriod) },
-        headers,
-      });
-      const all = data as Transaction[];
-      if (kind === 'savings') {
-        setItems(all.filter(isSavingsTxn));
-        return;
-      }
-      if (kind === 'income') {
-        setItems(all.filter((item) => item.type === 'income'));
-        return;
-      }
-      setItems(all.filter((item) => item.type === 'expense' && !isSavingsTxn(item)));
+      const { data } = await api.get('/transactions', { params, headers });
+      if (gen !== periodGen.current) return;
+      setPeriodItems(data as Transaction[]);
     },
     []
   );
 
+  // Cache-first on focus; background SWR updates via subscribe. Bypass only on pull-refresh.
   useFocusEffect(
     useCallback(() => {
       const run = async () => {
-        await loadOverview(focusMonth, focusYear);
-        // Month list reuses the overview txn cache key (instant after overview).
-        await loadPeriod(period, flowMode, focusMonth, focusYear);
+        await Promise.all([
+          loadOverview(focusMonth, focusYear, false),
+          loadPeriod(period, focusMonth, focusYear, false),
+        ]);
       };
       run().catch(() => {
         /* keep last overview/list on focus errors */
       });
-    }, [loadOverview, loadPeriod, period, flowMode, focusMonth, focusYear])
+      return () => {
+        overviewGen.current += 1;
+        periodGen.current += 1;
+      };
+    }, [loadOverview, loadPeriod, period, focusMonth, focusYear])
   );
+
+  // Apply background revalidate results without waiting for another focus.
+  useEffect(() => {
+    const txnParams = periodQueryParams(period, focusMonth, focusYear);
+    const summaryParams = overviewSummaryParams(i18n.language, focusMonth, focusYear);
+    const unsubTxn = subscribeApiCacheKey('/transactions', txnParams, (data) => {
+      if (Array.isArray(data)) setPeriodItems(data as Transaction[]);
+    });
+    const unsubSummary = subscribeApiCacheKey('/dashboard/summary', summaryParams, (data) => {
+      if (data && typeof data === 'object') setSummary(data as DashboardSummary);
+    });
+    return () => {
+      unsubTxn();
+      unsubSummary();
+    };
+  }, [period, focusMonth, focusYear, i18n.language]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     try {
       await Promise.all([
         loadOverview(focusMonth, focusYear, true),
-        loadPeriod(period, flowMode, focusMonth, focusYear, true),
+        loadPeriod(period, focusMonth, focusYear, true),
       ]);
     } finally {
       setRefreshing(false);
@@ -442,7 +490,18 @@ export default function ExpensesScreen() {
     setPeriod('month');
   };
 
+  const onSelectPeriod = (next: TransactionPeriod) => {
+    if (next === 'month') {
+      const now = new Date();
+      setFocusMonth(now.getMonth() + 1);
+      setFocusYear(now.getFullYear());
+    }
+    setPeriod(next);
+    setFilterOpen(false);
+  };
+
   const flowTabs = [
+    { key: 'all' as const, label: t('expenses.modeAll', { defaultValue: 'All' }) },
     { key: 'expense' as const, label: t('expenses.modeExpenses', { defaultValue: 'Expenses' }) },
     { key: 'income' as const, label: t('expenses.modeIncome', { defaultValue: 'Income' }) },
     { key: 'savings' as const, label: t('expenses.modeSavings', { defaultValue: 'Savings' }) },
@@ -461,11 +520,15 @@ export default function ExpensesScreen() {
     return Math.round((delta / Math.abs(prev)) * 100);
   }, [summary?.toSavings, summary?.vsLastMonth?.toSavings]);
 
-  const changePct = isIncomeMode
-    ? summary?.vsLastMonth?.incomePct ?? 0
-    : isSavingsMode
-      ? savingsPct
-      : summary?.vsLastMonth?.expensesPct ?? 0;
+  const changePct = isAllMode
+    ? summary?.vsLastMonth?.savedPct ??
+      summary?.vsLastMonth?.incomePct ??
+      0
+    : isIncomeMode
+      ? summary?.vsLastMonth?.incomePct ?? 0
+      : isSavingsMode
+        ? savingsPct
+        : summary?.vsLastMonth?.expensesPct ?? 0;
   const changeUp = changePct > 0;
   const chartBars = useMemo(
     () => lastSevenMonthBars(monthRows, i18n.language, flowMode),
@@ -476,19 +539,22 @@ export default function ExpensesScreen() {
     [items]
   );
   const useMonthSummary = period === 'month';
-  const monthCount = isIncomeMode
-    ? monthIncomeCount
-    : isSavingsMode
-      ? monthSavingsCount
-      : monthExpenseCount;
+  const monthCount = isAllMode
+    ? monthExpenseCount + monthIncomeCount + monthSavingsCount
+    : isIncomeMode
+      ? monthIncomeCount
+      : isSavingsMode
+        ? monthSavingsCount
+        : monthExpenseCount;
   const listCount = items.length;
-  const totalAmount = useMonthSummary
-    ? isIncomeMode
+  const monthSummaryTotal = isAllMode
+    ? (summary?.income ?? 0) + (summary?.expenses ?? 0) + (summary?.toSavings ?? 0)
+    : isIncomeMode
       ? summary?.income ?? 0
       : isSavingsMode
         ? summary?.toSavings ?? 0
-        : summary?.expenses ?? 0
-    : periodListTotal;
+        : summary?.expenses ?? 0;
+  const totalAmount = useMonthSummary ? monthSummaryTotal : periodListTotal;
   const heroCount = useMonthSummary ? monthCount : listCount;
   const heroValue = metricMode === 'count' ? String(heroCount) : formatPKR(totalAmount);
   const tipLabel = heroValue;
@@ -505,6 +571,13 @@ export default function ExpensesScreen() {
         .sort((a, b) => b.total - a.total);
     };
 
+    if (isAllMode) {
+      return fromItems((item) => {
+        if (isSavingsTxn(item)) return 'savings';
+        if (item.type === 'income') return item.category || 'other_income';
+        return item.category || 'other';
+      });
+    }
     if (isIncomeMode) {
       if (useMonthSummary && summary?.incomeCategoryBreakdown?.length) {
         return summary.incomeCategoryBreakdown;
@@ -519,6 +592,7 @@ export default function ExpensesScreen() {
     }
     return fromItems((item) => item.category || 'other');
   }, [
+    isAllMode,
     isIncomeMode,
     isSavingsMode,
     useMonthSummary,
@@ -530,16 +604,17 @@ export default function ExpensesScreen() {
   const spendSlices = useMemo(() => {
     return categoryRows.slice(0, 5).map((row, i) => ({
       value: row.total,
-      color: isSavingsMode ? categoryColorAt(i) : categoryTint(row._id, i),
+      color:
+        isSavingsMode || isAllMode ? categoryColorAt(i) : categoryTint(row._id, i),
       id: row._id,
       total: row.total,
     }));
-  }, [categoryRows, isSavingsMode]);
+  }, [categoryRows, isSavingsMode, isAllMode]);
 
   const spendTotal = spendSlices.reduce((s, r) => s + r.value, 0);
 
   const filteredItems = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     if (!q) return items;
     return items.filter((item) => {
       const label = getCategoryLabel(item.category, item.customCategory, t).toLowerCase();
@@ -547,7 +622,7 @@ export default function ExpensesScreen() {
       const type = item.type.toLowerCase();
       return label.includes(q) || note.includes(q) || type.includes(q);
     });
-  }, [items, searchQuery, t]);
+  }, [items, deferredSearch, t]);
 
   const txnSections = useMemo(() => {
     const groups = new Map<string, { title: string; sortKey: string; data: Transaction[]; total: number }>();
@@ -568,17 +643,19 @@ export default function ExpensesScreen() {
         title = d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
       }
       const dayAmt =
-        flowMode === 'income'
-          ? item.type === 'income'
-            ? item.amount
-            : 0
-          : flowMode === 'savings'
-            ? isSavingsTxn(item)
+        flowMode === 'all'
+          ? item.amount
+          : flowMode === 'income'
+            ? item.type === 'income'
               ? item.amount
               : 0
-            : item.type === 'expense' && !isSavingsTxn(item)
-              ? item.amount
-              : 0;
+            : flowMode === 'savings'
+              ? isSavingsTxn(item)
+                ? item.amount
+                : 0
+              : item.type === 'expense' && !isSavingsTxn(item)
+                ? item.amount
+                : 0;
       const existing = groups.get(key);
       if (existing) {
         existing.data.push(item);
@@ -626,9 +703,9 @@ export default function ExpensesScreen() {
       onConfirm: async () => {
         try {
           await api.delete(`/transactions/${item._id}`);
-          setItems((prev) => prev.filter((row) => row._id !== item._id));
+          setPeriodItems((prev) => prev.filter((row) => row._id !== item._id));
           await Promise.all([
-            loadPeriod(period, flowMode, focusMonth, focusYear, true),
+            loadPeriod(period, focusMonth, focusYear, true),
             loadOverview(focusMonth, focusYear, true),
           ]);
         } catch {
@@ -651,7 +728,7 @@ export default function ExpensesScreen() {
   const addTransaction = () => {
     router.push({
       pathname: '/add-transaction',
-      params: { type: flowMode },
+      params: flowMode === 'all' ? { type: 'expense' } : { type: flowMode },
     });
   };
 
@@ -697,22 +774,22 @@ export default function ExpensesScreen() {
     );
   };
 
-  const flowAccent = TxnKind[flowMode];
-  const flowSoft = TxnKindSoft[flowMode];
+  const flowAccent = FLOW_ACCENT[flowMode];
+  const flowSoft = FLOW_SOFT[flowMode];
   const heroColors =
-    flowMode === 'income'
+    flowMode === 'income' || flowMode === 'all'
       ? (['#062A22', '#065F46', '#047857', '#0A3D32'] as const)
       : flowMode === 'savings'
         ? (['#2A2110', '#5C4A1A', '#A8841C', '#1A160C'] as const)
         : (['#2A0A12', '#4C0519', '#9F1239', '#1A080E'] as const);
   const waveFillA =
-    flowMode === 'income'
+    flowMode === 'income' || flowMode === 'all'
       ? 'rgba(4, 120, 87, 0.45)'
       : flowMode === 'savings'
         ? 'rgba(201, 162, 39, 0.4)'
         : 'rgba(190, 18, 60, 0.4)';
   const waveFillB =
-    flowMode === 'income'
+    flowMode === 'income' || flowMode === 'all'
       ? 'rgba(6, 78, 59, 0.55)'
       : flowMode === 'savings'
         ? 'rgba(122, 95, 20, 0.5)'
@@ -721,17 +798,36 @@ export default function ExpensesScreen() {
   const deltaColor = flowSoft;
   const deltaPillBg = `${flowAccent}55`;
 
-  const totalLabel = isIncomeMode
-    ? t('expenses.totalIncome', { defaultValue: 'Total Income' })
-    : isSavingsMode
-      ? t('expenses.totalSavings', { defaultValue: 'Total Savings' })
-      : t('expenses.totalExpenses', { defaultValue: 'Total Expenses' });
+  const totalLabel = isAllMode
+    ? t('expenses.totalAll', { defaultValue: 'All transactions' })
+    : isIncomeMode
+      ? t('expenses.totalIncome', { defaultValue: 'Total Income' })
+      : isSavingsMode
+        ? t('expenses.totalSavings', { defaultValue: 'Total Savings' })
+        : t('expenses.totalExpenses', { defaultValue: 'Total Expenses' });
 
-  const categoryPanelTitle = isIncomeMode
-    ? t('expenses.incomeByCategory', { defaultValue: 'Income by Category' })
-    : isSavingsMode
-      ? t('expenses.savingsBySource', { defaultValue: 'Savings by Source' })
-      : t('expenses.spendingByCategory', { defaultValue: 'Spending by Category' });
+  const calNow = new Date();
+  const viewingPastMonth =
+    useMonthSummary &&
+    (focusMonth !== calNow.getMonth() + 1 || focusYear !== calNow.getFullYear());
+  const focusMonthLabel = useMemo(() => {
+    try {
+      return new Date(focusYear, focusMonth - 1, 1).toLocaleString(localeForLanguage(i18n.language), {
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return `${focusMonth}/${focusYear}`;
+    }
+  }, [focusMonth, focusYear, i18n.language]);
+
+  const categoryPanelTitle = isAllMode
+    ? t('expenses.byCategory', { defaultValue: 'By Category' })
+    : isIncomeMode
+      ? t('expenses.incomeByCategory', { defaultValue: 'Income by Category' })
+      : isSavingsMode
+        ? t('expenses.savingsBySource', { defaultValue: 'Savings by Source' })
+        : t('expenses.spendingByCategory', { defaultValue: 'Spending by Category' });
 
   const listHeader = (
     <View>
@@ -763,6 +859,14 @@ export default function ExpensesScreen() {
             <AppText variant="label" color="rgba(255,255,255,0.85)">
               {totalLabel}
             </AppText>
+            {viewingPastMonth ? (
+              <AppText variant="caption" color="rgba(255,255,255,0.65)" style={{ marginTop: 2 }}>
+                {t('expenses.showingMonth', {
+                  defaultValue: 'Showing {{month}}',
+                  month: focusMonthLabel,
+                })}
+              </AppText>
+            ) : null}
             <AppText
               variant="amount"
               color={onBrand}
@@ -940,9 +1044,10 @@ export default function ExpensesScreen() {
         sections={txnSections}
         keyExtractor={(item) => item._id}
         stickySectionHeadersEnabled={false}
-        initialNumToRender={12}
-        maxToRenderPerBatch={12}
-        windowSize={7}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
         ListHeaderComponent={listHeader}
         contentContainerStyle={[
           styles.listContent,
@@ -957,25 +1062,33 @@ export default function ExpensesScreen() {
           <EmptyState
             icon="receipt-outline"
             title={
-              isIncomeMode
-                ? t('expenses.emptyIncomeTitle')
-                : isSavingsMode
-                  ? t('expenses.emptySavingsTitle')
-                  : t('expenses.emptyExpensesTitle')
+              isAllMode
+                ? t('expenses.emptyAllTitle', { defaultValue: 'No transactions yet' })
+                : isIncomeMode
+                  ? t('expenses.emptyIncomeTitle')
+                  : isSavingsMode
+                    ? t('expenses.emptySavingsTitle')
+                    : t('expenses.emptyExpensesTitle')
             }
             subtitle={
-              isIncomeMode
-                ? t('expenses.emptyIncomeHint')
-                : isSavingsMode
-                  ? t('expenses.emptySavingsHint')
-                  : t('expenses.emptyExpensesHint')
+              isAllMode
+                ? t('expenses.emptyAllHint', {
+                    defaultValue: 'Add income, expenses, or savings to see them here.',
+                  })
+                : isIncomeMode
+                  ? t('expenses.emptyIncomeHint')
+                  : isSavingsMode
+                    ? t('expenses.emptySavingsHint')
+                    : t('expenses.emptyExpensesHint')
             }
             actionLabel={
-              isIncomeMode
-                ? t('expenses.emptyCtaIncome')
-                : isSavingsMode
-                  ? t('expenses.emptyCtaSavings')
-                  : t('expenses.emptyCtaExpense')
+              isAllMode
+                ? t('expenses.emptyCtaAll', { defaultValue: 'Add transaction' })
+                : isIncomeMode
+                  ? t('expenses.emptyCtaIncome')
+                  : isSavingsMode
+                    ? t('expenses.emptyCtaSavings')
+                    : t('expenses.emptyCtaExpense')
             }
             onAction={addTransaction}
             accent={flowAccent}
@@ -1003,11 +1116,13 @@ export default function ExpensesScreen() {
         ]}
         accessibilityRole="button"
         accessibilityLabel={
-          isIncomeMode
-            ? t('expenses.addIncome')
-            : isSavingsMode
-              ? t('expenses.addSavings')
-              : t('expenses.addExpense')
+          isAllMode
+            ? t('expenses.addTransaction', { defaultValue: 'Add transaction' })
+            : isIncomeMode
+              ? t('expenses.addIncome')
+              : isSavingsMode
+                ? t('expenses.addSavings')
+                : t('expenses.addExpense')
         }>
         <Ionicons name="add" size={28} color={onBrand} />
       </Pressable>
@@ -1134,10 +1249,7 @@ export default function ExpensesScreen() {
             return (
               <Pressable
                 key={tab.key}
-                onPress={() => {
-                  setPeriod(tab.key);
-                  setFilterOpen(false);
-                }}
+                onPress={() => onSelectPeriod(tab.key)}
                 style={[
                   styles.filterChip,
                   { backgroundColor: field, borderColor: border },

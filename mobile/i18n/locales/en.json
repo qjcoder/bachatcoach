@@ -100,8 +100,9 @@
   "dashboard": {
     "greeting": "Assalam-o-Alaikum",
     "greetingSubtitle": "Small steps. Big financial freedom.",
-    "savedThisMonth": "Saved This Month",
-    "totalSavedOverall": "Total Saved",
+    "savedThisMonth": "Remaining This Month",
+    "totalSavedOverall": "Total Remaining",
+    "remainingHint": "Remaining is cash left after expenses. Savings is what you moved aside.",
     "scopeOverall": "Overall",
     "scopeThisMonth": "This month",
     "allTime": "All time",

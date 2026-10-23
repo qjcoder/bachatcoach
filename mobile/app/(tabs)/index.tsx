@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, RefreshControl, Pressable, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import api, { peekApiCache } from '@/lib/api';
+import api, { peekApiCache, subscribeApiCacheKey } from '@/lib/api';
 import { useFormatPKR, formatAmount } from '@/lib/format';
 import { getCurrency } from '@/constants/currencies';
 import { useAuth } from '@/context/AuthContext';
@@ -203,6 +203,13 @@ export default function HomeScreen() {
     }, [load])
   );
 
+  useEffect(() => {
+    const params = summaryParams(i18n.language, scope);
+    return subscribeApiCacheKey('/dashboard/summary', params, (next) => {
+      if (next && typeof next === 'object') setSummary(next as DashboardSummary);
+    });
+  }, [i18n.language, scope]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -312,8 +319,8 @@ export default function HomeScreen() {
           <View style={styles.heroLeft}>
             <AppText variant="label" color="rgba(255,255,255,0.8)">
               {isOverall
-                ? t('dashboard.totalSavedOverall', { defaultValue: 'Total Saved' })
-                : t('dashboard.savedThisMonth')}
+                ? t('dashboard.totalSavedOverall', { defaultValue: 'Total Remaining' })
+                : t('dashboard.savedThisMonth', { defaultValue: 'Remaining This Month' })}
             </AppText>
             <AppText variant="amountMd" color="#FFFFFF" numberOfLines={1} adjustsFontSizeToFit style={styles.heroAmount}>
               {formatPKR(saved)}
@@ -338,9 +345,12 @@ export default function HomeScreen() {
               </View>
             )}
             <RTLRow gap={6} style={styles.heroNote}>
-              <Ionicons name="stats-chart" size={13} color="#A7F3D0" />
-              <AppText variant="caption" color="rgba(255,255,255,0.8)" style={{ flex: 1 }} numberOfLines={2}>
-                {t('dashboard.doingGreat')}
+              <Ionicons name="information-circle-outline" size={13} color="#A7F3D0" />
+              <AppText variant="caption" color="rgba(255,255,255,0.8)" style={{ flex: 1 }} numberOfLines={3}>
+                {t('dashboard.remainingHint', {
+                  defaultValue:
+                    'Remaining is cash left after expenses. Savings is what you moved aside.',
+                })}
               </AppText>
             </RTLRow>
           </View>

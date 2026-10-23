@@ -1,4 +1,4 @@
-export type TransactionPeriod = 'today' | 'week' | 'month' | 'year';
+export type TransactionPeriod = 'today' | 'week' | 'month' | 'year' | 'all';
 
 /** Local calendar month → ISO bounds (device timezone). */
 export function monthBounds(month: number, year: number) {
@@ -65,13 +65,53 @@ export function getTransactionPeriodRange(period: TransactionPeriod, now = new D
       end.setMonth(11, 31);
       end.setHours(23, 59, 59, 999);
       break;
+    case 'all':
+      // Stable day bounds so GET cache keys match across screens / prefetch.
+      start.setFullYear(2000, 0, 1);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      end.setMilliseconds(999);
+      break;
   }
 
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
 export function periodFetchLimit(period: TransactionPeriod): number {
-  if (period === 'year') return 2000;
+  if (period === 'all') return 2000;
+  if (period === 'year') return 1000;
   if (period === 'month') return 500;
   return 200;
+}
+
+type MonthActivityRow = {
+  month: number;
+  year: number;
+  income?: number;
+  expenses?: number;
+  toSavings?: number;
+};
+
+/** Newest calendar month (within rows) that has activity for this cashflow mode. */
+export function latestMonthWithActivity(
+  rows: MonthActivityRow[],
+  kind: 'all' | 'expense' | 'income' | 'savings',
+  now = new Date()
+): { month: number; year: number } | null {
+  for (let i = 0; i < 36; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+    const row = rows.find((r) => r.month === month && r.year === year);
+    const value =
+      kind === 'all'
+        ? (row?.income ?? 0) + (row?.expenses ?? 0) + (row?.toSavings ?? 0)
+        : kind === 'income'
+          ? row?.income ?? 0
+          : kind === 'savings'
+            ? row?.toSavings ?? 0
+            : row?.expenses ?? 0;
+    if (value > 0) return { month, year };
+  }
+  return null;
 }

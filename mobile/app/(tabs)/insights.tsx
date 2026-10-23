@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DirectionScrollView } from '@/components/DirectionScrollView';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import api from '@/lib/api';
+import api, { peekApiCache, subscribeApiCacheKey } from '@/lib/api';
 import { useFormatPKR, formatAmount } from '@/lib/format';
 import { exportMonthlyReportPdf, type MonthlyReportData } from '@/lib/monthlyReportPdf';
 import { getDailyQuote } from '@/lib/dailyQuotes';
@@ -77,11 +77,21 @@ export default function InsightsScreen() {
   const insets = useSafeAreaInsets();
   const { textBlock, headingBlock } = useDirection();
   const { bg, card, border, text, muted, well, chartEmpty } = usePageChrome();
-  const [data, setData] = useState<InsightsData | null>(null);
+  const [data, setData] = useState<InsightsData | null>(() =>
+    peekApiCache<InsightsData>('/dashboard/summary', {
+      lang: i18n.language,
+      ...currentMonthSummaryParams(),
+    })
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<InsightsTab>('overview');
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
-  const [report, setReport] = useState<MonthlyReportData | null>(null);
+  const [report, setReport] = useState<MonthlyReportData | null>(() =>
+    peekApiCache<MonthlyReportData>('/dashboard/monthly-report', {
+      year: new Date().getFullYear(),
+      tz: deviceTimeZone(),
+    })
+  );
   const [exporting, setExporting] = useState(false);
 
   const load = async (fresh = false) => {
@@ -111,6 +121,21 @@ export default function InsightsScreen() {
       });
     }, [i18n.language, reportYear])
   );
+
+  useEffect(() => {
+    const summaryParams = { lang: i18n.language, ...currentMonthSummaryParams() };
+    const reportParams = { year: reportYear, tz: deviceTimeZone() };
+    const unsubSummary = subscribeApiCacheKey('/dashboard/summary', summaryParams, (next) => {
+      if (next && typeof next === 'object') setData(next as InsightsData);
+    });
+    const unsubReport = subscribeApiCacheKey('/dashboard/monthly-report', reportParams, (next) => {
+      if (next && typeof next === 'object') setReport(next as MonthlyReportData);
+    });
+    return () => {
+      unsubSummary();
+      unsubReport();
+    };
+  }, [i18n.language, reportYear]);
 
   const changeYear = (delta: number) => {
     setReportYear((y) => y + delta);

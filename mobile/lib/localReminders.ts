@@ -8,16 +8,34 @@ const SCHEDULED_IDS_KEY = 'bachatcoach_local_reminder_ids';
 
 type NotificationsModule = typeof import('expo-notifications');
 
-let notificationsMod: NotificationsModule | null = null;
+let notificationsMod: NotificationsModule | null | undefined;
 let handlerReady = false;
 
+/** Probe native first — requiring expo-notifications throws LogBox errors when the module is absent. */
+function nativeNotificationsAvailable(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { requireOptionalNativeModule } = require('expo-modules-core') as {
+      requireOptionalNativeModule: (name: string) => unknown;
+    };
+    return Boolean(requireOptionalNativeModule('ExpoPushTokenManager'));
+  } catch {
+    return false;
+  }
+}
+
 function getNotifications(): NotificationsModule | null {
-  if (notificationsMod) return notificationsMod;
+  if (notificationsMod !== undefined) return notificationsMod;
+  if (!nativeNotificationsAvailable()) {
+    notificationsMod = null;
+    return null;
+  }
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     notificationsMod = require('expo-notifications') as NotificationsModule;
     return notificationsMod;
   } catch {
+    notificationsMod = null;
     return null;
   }
 }
