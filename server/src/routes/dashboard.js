@@ -11,12 +11,103 @@ const router = express.Router();
 
 router.use(auth);
 
-function monthRange(month, year) {
-  const m = Number(month) - 1;
-  const y = Number(year);
+/** Default for old Play Store builds that omit from/to / tz (BachatCoach is PK-first). */
+const DEFAULT_TZ = 'Asia/Karachi';
+
+function parseIsoDate(value) {
+  if (!value || typeof value !== 'string') return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function safeTimeZone(value) {
+  if (typeof value !== 'string' || !value) return DEFAULT_TZ;
+  if (!/^[A-Za-z0-9_+\-/]+$/.test(value) || value.length > 64) return DEFAULT_TZ;
+  return value;
+}
+
+function zonedParts(date, timeZone) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23',
+  });
+  const out = {};
+  for (const part of fmt.formatToParts(date)) {
+    if (part.type !== 'literal') out[part.type] = Number(part.value);
+  }
+  return out;
+}
+
+/** Offset of `timeZone` at `date` (ms to add to local wall time to get UTC… inverted below). */
+function timezoneOffsetMs(date, timeZone) {
+  const p = zonedParts(date, timeZone);
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return asUtc - date.getTime();
+}
+
+/** Wall clock in `timeZone` → UTC Date (handles fixed offsets like Asia/Karachi). */
+function zonedLocalToUtc(year, month, day, hour, minute, second, timeZone) {
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second);
+  let instant = new Date(utcGuess);
+  instant = new Date(utcGuess - timezoneOffsetMs(instant, timeZone));
+  instant = new Date(utcGuess - timezoneOffsetMs(instant, timeZone));
+  return instant;
+}
+
+/** Calendar month in timezone → [start, end) UTC instants. */
+function monthRangeInTz(month, year, timeZone = DEFAULT_TZ) {
+  const start = zonedLocalToUtc(year, month, 1, 0, 0, 0, timeZone);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const end = zonedLocalToUtc(nextYear, nextMonth, 1, 0, 0, 0, timeZone);
+  return { start, end };
+}
+
+function nowCalendarInTz(timeZone = DEFAULT_TZ) {
+  const p = zonedParts(new Date(), timeZone);
+  return { year: p.year, month: p.month, day: p.day };
+}
+
+/**
+ * Prefer client local bounds (from/to).
+ * Old apps omit them → Asia/Karachi month so Play Store installs get correct PK totals.
+ */
+function resolvePeriod(req) {
+  const tz = safeTimeZone(req.query.tz);
+  const nowCal = nowCalendarInTz(tz);
+  const month = Number(req.query.month) || nowCal.month;
+  const year = Number(req.query.year) || nowCal.year;
+  const fallback = monthRangeInTz(month, year, tz);
+  const start = parseIsoDate(req.query.from) || fallback.start;
+  const endInclusive = parseIsoDate(req.query.to);
+  // Client sends inclusive end-of-day; fallback uses $lt next month start.
+  const useInclusiveEnd = Boolean(endInclusive);
+  const end = endInclusive || fallback.end;
+
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevFallback = monthRangeInTz(prevMonth, prevYear, tz);
+  const prevStart = parseIsoDate(req.query.prevFrom) || prevFallback.start;
+  const prevEndRaw = parseIsoDate(req.query.prevTo);
+  const prevUseInclusiveEnd = Boolean(prevEndRaw);
+  const prevEnd = prevEndRaw || prevFallback.end;
+
   return {
-    start: new Date(y, m, 1),
-    end: new Date(y, m + 1, 1),
+    month,
+    year,
+    tz,
+    start,
+    end,
+    useInclusiveEnd,
+    prevStart,
+    prevEnd,
+    prevUseInclusiveEnd,
   };
 }
 
@@ -71,13 +162,30 @@ router.get('/summary', async (req, res, next) => {
   try {
     const userId = userObjectId(req);
     const now = new Date();
-    const month = Number(req.query.month) || now.getMonth() + 1;
-    const year = Number(req.query.year) || now.getFullYear();
-    const { start, end } = monthRange(month, year);
+    const {
+      month,
+      year,
+      start,
+      end,
+      useInclusiveEnd,
+      prevStart,
+      prevEnd,
+      prevUseInclusiveEnd,
+    } = resolvePeriod(req);
 
-    const prevMonth = month === 1 ? 12 : month - 1;
-    const prevYear = month === 1 ? year - 1 : year;
-    const prevRange = monthRange(prevMonth, prevYear);
+    const currentDateMatch = useInclusiveEnd
+      ? { date: { $gte: start, $lte: end } }
+      : { date: { $gte: start, $lt: end } };
+    const previousDateMatch = prevUseInclusiveEnd
+      ? { date: { $gte: prevStart, $lte: prevEnd } }
+      : { date: { $gte: prevStart, $lt: prevEnd } };
+    const spanEnd = useInclusiveEnd ? end : end;
+    const spanMatch = {
+      date: {
+        $gte: prevStart,
+        ...(useInclusiveEnd ? { $lte: spanEnd } : { $lt: spanEnd }),
+      },
+    };
 
     const [txFacet, openContacts, goals, userDoc, recurringTemplates] =
       await Promise.all([
@@ -85,17 +193,17 @@ router.get('/summary', async (req, res, next) => {
         {
           $match: {
             user: userId,
-            date: { $gte: prevRange.start, $lt: end },
+            ...spanMatch,
           },
         },
         {
           $facet: {
             current: [
-              { $match: { date: { $gte: start, $lt: end } } },
+              { $match: currentDateMatch },
               { $project: { type: 1, category: 1, amount: 1 } },
             ],
             previous: [
-              { $match: { date: { $gte: prevRange.start, $lt: prevRange.end } } },
+              { $match: previousDateMatch },
               { $project: { type: 1, category: 1, amount: 1 } },
             ],
             categoryBreakdown: [
@@ -103,7 +211,7 @@ router.get('/summary', async (req, res, next) => {
                 $match: {
                   type: 'expense',
                   category: { $ne: 'savings' },
-                  date: { $gte: start, $lt: end },
+                  ...currentDateMatch,
                 },
               },
               { $group: { _id: '$category', total: { $sum: '$amount' } } },
@@ -113,14 +221,14 @@ router.get('/summary', async (req, res, next) => {
               {
                 $match: {
                   type: 'income',
-                  date: { $gte: start, $lt: end },
+                  ...currentDateMatch,
                 },
               },
               { $group: { _id: '$category', total: { $sum: '$amount' } } },
               { $sort: { total: -1 } },
             ],
             recent: [
-              { $match: { date: { $gte: start, $lt: end } } },
+              { $match: currentDateMatch },
               { $sort: { date: -1 } },
               { $limit: 4 },
               {
@@ -139,14 +247,14 @@ router.get('/summary', async (req, res, next) => {
                 $match: {
                   type: 'income',
                   category: 'salary',
-                  date: { $gte: start, $lt: end },
+                  ...currentDateMatch,
                 },
               },
               { $limit: 1 },
               { $project: { _id: 1 } },
             ],
             monthKeys: [
-              { $match: { date: { $gte: start, $lt: end } } },
+              { $match: currentDateMatch },
               {
                 $project: {
                   key: {
@@ -310,22 +418,29 @@ router.get('/summary', async (req, res, next) => {
 router.get('/monthly-report', async (req, res, next) => {
   try {
     const userId = userObjectId(req);
-    const year = Number(req.query.year) || new Date().getFullYear();
+    const tz = safeTimeZone(req.query.tz);
+    const year = Number(req.query.year) || nowCalendarInTz(tz).year;
+    // Local calendar year in tz (padded) so Dec 31 evening PK isn't dropped.
+    const yearStart =
+      parseIsoDate(req.query.from) || zonedLocalToUtc(year, 1, 1, 0, 0, 0, tz);
+    const yearEnd =
+      parseIsoDate(req.query.to) || zonedLocalToUtc(year + 1, 1, 1, 0, 0, 0, tz);
 
     const rows = await Transaction.aggregate([
       {
         $match: {
           user: userId,
           date: {
-            $gte: new Date(year, 0, 1),
-            $lt: new Date(year + 1, 0, 1),
+            $gte: yearStart,
+            $lt: yearEnd,
           },
         },
       },
       {
         $group: {
           _id: {
-            month: { $month: '$date' },
+            month: { $month: { date: '$date', timezone: tz } },
+            year: { $year: { date: '$date', timezone: tz } },
             type: '$type',
             category: '$category',
           },
@@ -336,7 +451,9 @@ router.get('/monthly-report', async (req, res, next) => {
 
     const months = Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
-      const monthRows = rows.filter((r) => r._id.month === month);
+      const monthRows = rows.filter(
+        (r) => r._id.month === month && (r._id.year == null || r._id.year === year)
+      );
       let income = 0;
       let expenses = 0;
       let toSavings = 0;

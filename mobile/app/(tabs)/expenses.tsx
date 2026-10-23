@@ -30,8 +30,11 @@ import { getCurrency } from '@/constants/currencies';
 import { useAuth } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
 import {
+  deviceTimeZone,
   getTransactionPeriodRange,
+  monthBounds,
   periodFetchLimit,
+  previousMonthBounds,
   type TransactionPeriod,
 } from '@/lib/transactionPeriod';
 import { Button } from '@/components/Button';
@@ -137,12 +140,6 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 const PERIOD_TABS: TransactionPeriod[] = ['today', 'week', 'month', 'year'];
-
-function monthBounds(month: number, year: number) {
-  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-  const end = new Date(year, month, 0, 23, 59, 59, 999);
-  return { from: start.toISOString(), to: end.toISOString() };
-}
 
 function lastSevenMonthBars(
   months: Array<MonthlyReportRow & { year: number }>,
@@ -306,9 +303,19 @@ export default function ExpensesScreen() {
   const [monthExpenseCount, setMonthExpenseCount] = useState(0);
   const [monthIncomeCount, setMonthIncomeCount] = useState(0);
   const [monthSavingsCount, setMonthSavingsCount] = useState(0);
-  const [summary, setSummary] = useState<DashboardSummary | null>(() =>
-    peekApiCache<DashboardSummary>('/dashboard/summary', { lang: i18n.language })
-  );
+  const [summary, setSummary] = useState<DashboardSummary | null>(() => {
+    const { from, to } = monthBounds(nowInit.getMonth() + 1, nowInit.getFullYear());
+    const prev = previousMonthBounds(nowInit.getMonth() + 1, nowInit.getFullYear());
+    return peekApiCache<DashboardSummary>('/dashboard/summary', {
+      lang: i18n.language,
+      month: nowInit.getMonth() + 1,
+      year: nowInit.getFullYear(),
+      from,
+      to,
+      prevFrom: prev.from,
+      prevTo: prev.to,
+    });
+  });
   const [monthRows, setMonthRows] = useState<Array<MonthlyReportRow & { year: number }>>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState<TransactionPeriod>('month');
@@ -327,21 +334,31 @@ export default function ExpensesScreen() {
     async (month: number, year: number, fresh = false) => {
       const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
       const { from, to } = monthBounds(month, year);
+      const prev = previousMonthBounds(month, year);
+      const tz = deviceTimeZone();
       const currentYear = new Date().getFullYear();
       const prevYear = currentYear - 1;
       const needsPrevYear = new Date().getMonth() < 6;
       const [summaryRes, monthAllRes, reportRes, prevReportRes] = await Promise.all([
         api.get('/dashboard/summary', {
-          params: { lang: i18n.language, month, year },
+          params: {
+            lang: i18n.language,
+            month,
+            year,
+            from,
+            to,
+            prevFrom: prev.from,
+            prevTo: prev.to,
+          },
           headers,
         }),
         api.get('/transactions', {
           params: { from, to, limit: periodFetchLimit('month') },
           headers,
         }),
-        api.get('/dashboard/monthly-report', { params: { year: currentYear }, headers }),
+        api.get('/dashboard/monthly-report', { params: { year: currentYear, tz }, headers }),
         needsPrevYear
-          ? api.get('/dashboard/monthly-report', { params: { year: prevYear }, headers })
+          ? api.get('/dashboard/monthly-report', { params: { year: prevYear, tz }, headers })
           : Promise.resolve({ data: { months: [] as MonthlyReportRow[] } }),
       ]);
       const all = monthAllRes.data as Transaction[];
@@ -454,47 +471,57 @@ export default function ExpensesScreen() {
     () => lastSevenMonthBars(monthRows, i18n.language, flowMode),
     [monthRows, i18n.language, flowMode]
   );
+  const periodListTotal = useMemo(
+    () => items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    [items]
+  );
+  const useMonthSummary = period === 'month';
   const monthCount = isIncomeMode
     ? monthIncomeCount
     : isSavingsMode
       ? monthSavingsCount
       : monthExpenseCount;
-  const totalAmount = isIncomeMode
-    ? summary?.income ?? 0
-    : isSavingsMode
-      ? summary?.toSavings ?? 0
-      : summary?.expenses ?? 0;
-  const heroValue = metricMode === 'count' ? String(monthCount) : formatPKR(totalAmount);
+  const listCount = items.length;
+  const totalAmount = useMonthSummary
+    ? isIncomeMode
+      ? summary?.income ?? 0
+      : isSavingsMode
+        ? summary?.toSavings ?? 0
+        : summary?.expenses ?? 0
+    : periodListTotal;
+  const heroCount = useMonthSummary ? monthCount : listCount;
+  const heroValue = metricMode === 'count' ? String(heroCount) : formatPKR(totalAmount);
   const tipLabel = heroValue;
 
   const categoryRows = useMemo(() => {
-    if (isIncomeMode) {
-      if (summary?.incomeCategoryBreakdown?.length) return summary.incomeCategoryBreakdown;
+    const fromItems = (pickId: (item: Transaction) => string) => {
       const map = new Map<string, number>();
       for (const item of items) {
-        if (item.type !== 'income') continue;
-        const id = item.category || 'other_income';
+        const id = pickId(item);
         map.set(id, (map.get(id) || 0) + item.amount);
       }
       return Array.from(map.entries())
         .map(([_id, total]) => ({ _id, total }))
         .sort((a, b) => b.total - a.total);
+    };
+
+    if (isIncomeMode) {
+      if (useMonthSummary && summary?.incomeCategoryBreakdown?.length) {
+        return summary.incomeCategoryBreakdown;
+      }
+      return fromItems((item) => item.category || 'other_income');
     }
     if (isSavingsMode) {
-      const map = new Map<string, number>();
-      for (const item of items) {
-        if (!isSavingsTxn(item)) continue;
-        const id = item.paymentMethod || 'other';
-        map.set(id, (map.get(id) || 0) + item.amount);
-      }
-      return Array.from(map.entries())
-        .map(([_id, total]) => ({ _id, total }))
-        .sort((a, b) => b.total - a.total);
+      return fromItems((item) => item.paymentMethod || 'other');
     }
-    return summary?.categoryBreakdown || [];
+    if (useMonthSummary && summary?.categoryBreakdown?.length) {
+      return summary.categoryBreakdown;
+    }
+    return fromItems((item) => item.category || 'other');
   }, [
     isIncomeMode,
     isSavingsMode,
+    useMonthSummary,
     summary?.incomeCategoryBreakdown,
     summary?.categoryBreakdown,
     items,
@@ -744,27 +771,35 @@ export default function ExpensesScreen() {
               style={styles.heroAmount}>
               {heroValue}
             </AppText>
-            <RTLRow gap={8} style={styles.deltaRow}>
-              <View
-                style={[
-                  styles.deltaPill,
-                  {
-                    backgroundColor: deltaPillBg,
-                  },
-                ]}>
-                <Ionicons
-                  name={changeUp ? 'arrow-up' : 'arrow-down'}
-                  size={10}
-                  color={deltaColor}
-                />
-                <AppText variant="captionBold" color={deltaColor}>
-                  {Math.abs(changePct)}%
+            {useMonthSummary ? (
+              <RTLRow gap={8} style={styles.deltaRow}>
+                <View
+                  style={[
+                    styles.deltaPill,
+                    {
+                      backgroundColor: deltaPillBg,
+                    },
+                  ]}>
+                  <Ionicons
+                    name={changeUp ? 'arrow-up' : 'arrow-down'}
+                    size={10}
+                    color={deltaColor}
+                  />
+                  <AppText variant="captionBold" color={deltaColor}>
+                    {Math.abs(changePct)}%
+                  </AppText>
+                </View>
+                <AppText variant="caption" color="rgba(255,255,255,0.55)">
+                  {t('expenses.vsLastMonth', { defaultValue: 'vs last month' })}
                 </AppText>
-              </View>
-              <AppText variant="caption" color="rgba(255,255,255,0.55)">
-                {t('expenses.vsLastMonth', { defaultValue: 'vs last month' })}
+              </RTLRow>
+            ) : (
+              <AppText variant="caption" color="rgba(255,255,255,0.55)" style={styles.deltaRow}>
+                {t(`expenses.filter${period.charAt(0).toUpperCase()}${period.slice(1)}`, {
+                  defaultValue: period,
+                })}
               </AppText>
-            </RTLRow>
+            )}
           </View>
           <View style={styles.heroRight}>
             <View style={[styles.metricToggle, { borderColor: `${flowSoft}33` }]}>

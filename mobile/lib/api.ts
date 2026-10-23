@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { currentMonthSummaryParams, deviceTimeZone } from '@/lib/transactionPeriod';
 
 function getApiUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
@@ -205,16 +206,17 @@ api.interceptors.response.use(
 
 /** Warm critical GETs after login / when tabs mount so navigation feels instant. */
 export async function prefetchCriticalData(lang = 'en') {
-  const year = new Date().getFullYear();
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+  const summaryParams = currentMonthSummaryParams();
+  const year = summaryParams.year;
+  const tz = deviceTimeZone();
 
   await Promise.allSettled([
-    api.get('/dashboard/summary', { params: { lang } }),
-    api.get('/transactions', { params: { from, to, limit: 200 } }),
+    api.get('/dashboard/summary', { params: { lang, ...summaryParams } }),
+    api.get('/transactions', {
+      params: { from: summaryParams.from, to: summaryParams.to, limit: 500 },
+    }),
     api.get('/contacts', { params: { includeSettled: 1 } }),
-    api.get('/dashboard/monthly-report', { params: { year } }),
+    api.get('/dashboard/monthly-report', { params: { year, tz } }),
   ]);
 }
 

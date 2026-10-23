@@ -1,0 +1,14 @@
+---
+description: Always commit, push, and deploy backend/server changes after fixing them
+alwaysApply: true
+---
+
+# Always deploy server changes
+
+When you change `server/` (API, Mongo queries, auth, dashboard, etc.):
+
+1. Commit the relevant changes (include related `mobile/` fixes in the same commit when they belong together).
+2. Push to `origin` on the current branch (`master` unless told otherwise) so Vercel/GitHub production deploy runs.
+3. Tell the user the push/deploy was triggered and that no Play Store rebuild is required for server-only fixes.
+
+Do not wait to be asked to deploy after server fixes — treat deploy as part of finishing the task.

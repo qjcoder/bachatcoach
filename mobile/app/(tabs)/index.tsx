@@ -21,6 +21,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { getCategoryLabel } from '@/lib/category';
 import { Brand, Radius, Spacing, TxnKind, TxnKindSoft, TxnKindDeep, txnKindGradient, txnKindGradientDeep, categoryTint } from '@/constants/theme';
 import { resolveMoneyKind, moneyKindColor } from '@/lib/txnKind';
+import { currentMonthSummaryParams } from '@/lib/transactionPeriod';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -172,13 +173,16 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { bg, card, border, text, muted, well, chartEmpty, field } = usePageChrome();
   const [summary, setSummary] = useState<DashboardSummary | null>(() =>
-    peekApiCache<DashboardSummary>('/dashboard/summary', { lang: i18n.language })
+    peekApiCache<DashboardSummary>('/dashboard/summary', {
+      lang: i18n.language,
+      ...currentMonthSummaryParams(),
+    })
   );
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async (fresh = false) => {
     const { data } = await api.get('/dashboard/summary', {
-      params: { lang: i18n.language },
+      params: { lang: i18n.language, ...currentMonthSummaryParams() },
       headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
     });
     setSummary(data);

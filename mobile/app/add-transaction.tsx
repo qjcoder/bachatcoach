@@ -40,6 +40,7 @@ import { uploadReceiptToDrive } from '@/lib/googleDrive';
 import { formatAmount, formatTransactionTime } from '@/lib/format';
 import { localeForLanguage, scriptLanguage } from '@/lib/language';
 import { getDailyQuote } from '@/lib/dailyQuotes';
+import { currentMonthSummaryParams } from '@/lib/transactionPeriod';
 import { usePageChrome } from '@/hooks/usePageChrome';
 import { BankLogo } from '@/components/BankLogo';
 
@@ -371,7 +372,9 @@ export default function AddTransactionScreen() {
     if (!isSavings) return;
     let cancelled = false;
     api
-      .get('/dashboard/summary', { params: { lang: i18n.language } })
+      .get('/dashboard/summary', {
+        params: { lang: i18n.language, ...currentMonthSummaryParams() },
+      })
       .then(({ data }) => {
         if (!cancelled) setMonthIncome(Number(data?.income) || 0);
       })

@@ -24,6 +24,7 @@ import { useDirection } from '@/hooks/useDirection';
 import { getCurrency } from '@/constants/currencies';
 import { Brand, Radius, Spacing, TxnKind, categoryTint, txnKindGradient } from '@/constants/theme';
 import { localeForLanguage, scriptLanguage } from '@/lib/language';
+import { currentMonthSummaryParams, deviceTimeZone } from '@/lib/transactionPeriod';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type CategoryItem = { _id: string; total: number };
@@ -85,7 +86,7 @@ export default function InsightsScreen() {
 
   const load = async (fresh = false) => {
     const { data: res } = await api.get('/dashboard/summary', {
-      params: { lang: i18n.language },
+      params: { lang: i18n.language, ...currentMonthSummaryParams() },
       headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
     });
     setData(res);
@@ -93,7 +94,7 @@ export default function InsightsScreen() {
 
   const loadReport = async (year: number, fresh = false) => {
     const { data: res } = await api.get('/dashboard/monthly-report', {
-      params: { year },
+      params: { year, tz: deviceTimeZone() },
       headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
     });
     setReport(res);
