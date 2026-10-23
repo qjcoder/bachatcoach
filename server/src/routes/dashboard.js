@@ -131,6 +131,67 @@ function contactBalance(c) {
   return total;
 }
 
+function entryInRange(entry, start, end, useInclusiveEnd) {
+  const d = entry?.date ? new Date(entry.date) : null;
+  if (!d || Number.isNaN(d.getTime())) return false;
+  if (d < start) return false;
+  return useInclusiveEnd ? d <= end : d < end;
+}
+
+/**
+ * Overall → current outstanding.
+ * This month → net loan activity in the period only (so Home filter matches income/expenses).
+ */
+function loanSummaryForScope(contacts, scopeAll, start, end, useInclusiveEnd) {
+  let totalLent = 0;
+  let totalBorrowed = 0;
+  let lentCount = 0;
+  let borrowedCount = 0;
+
+  for (const c of contacts || []) {
+    if (scopeAll) {
+      const bal = contactBalance(c);
+      if (bal <= 0) continue;
+      if (c.direction === 'i_lent') {
+        totalLent += bal;
+        lentCount += 1;
+      } else {
+        totalBorrowed += bal;
+        borrowedCount += 1;
+      }
+      continue;
+    }
+
+    let lent = 0;
+    let repaid = 0;
+    let received = 0;
+    let paidBack = 0;
+    for (const entry of c.entries || []) {
+      if (!entryInRange(entry, start, end, useInclusiveEnd)) continue;
+      if (entry.type === 'lent') lent += entry.amount;
+      else if (entry.type === 'repaid') repaid += entry.amount;
+      else if (entry.type === 'received') received += entry.amount;
+      else if (entry.type === 'paid_back') paidBack += entry.amount;
+    }
+
+    if (c.direction === 'i_lent') {
+      const net = lent - repaid;
+      if (net > 0) {
+        totalLent += net;
+        lentCount += 1;
+      }
+    } else {
+      const net = received - paidBack;
+      if (net > 0) {
+        totalBorrowed += net;
+        borrowedCount += 1;
+      }
+    }
+  }
+
+  return { totalLent, totalBorrowed, lentCount, borrowedCount };
+}
+
 /** True spending (excludes legacy expense+category savings). */
 function isSpendingExpense(doc) {
   return doc.type === 'expense' && doc.category !== 'savings';
@@ -289,10 +350,11 @@ router.get('/summary', async (req, res, next) => {
       ]),
       Contact.find({
         user: req.userId,
-        isSettled: false,
         direction: { $in: ['i_lent', 'i_borrowed'] },
+        // Overall: open balances only. This month: all contacts (activity in range).
+        ...(scopeAll ? { isSettled: false } : {}),
       })
-        .select('direction entries')
+        .select('direction entries isSettled')
         .lean(),
       Goal.find({ user: req.userId, isCompleted: false })
         .select('_id title targetAmount currentAmount isCompleted')
@@ -324,10 +386,12 @@ router.get('/summary', async (req, res, next) => {
     const lang = req.query.lang === 'ur' ? 'ur' : 'en';
     const dailyQuote = getDailyQuote(lang);
 
-    const lentContacts = (openContacts || []).filter((c) => c.direction === 'i_lent');
-    const borrowedContacts = (openContacts || []).filter((c) => c.direction === 'i_borrowed');
-    const totalLent = lentContacts.reduce((sum, c) => sum + contactBalance(c), 0);
-    const totalBorrowed = borrowedContacts.reduce((sum, c) => sum + contactBalance(c), 0);
+    const {
+      totalLent,
+      totalBorrowed,
+      lentCount,
+      borrowedCount,
+    } = loanSummaryForScope(openContacts, scopeAll, start, end, useInclusiveEnd);
 
     const topCategory = categoryBreakdown[0];
     const savingsOpportunity = topCategory
@@ -420,8 +484,8 @@ router.get('/summary', async (req, res, next) => {
       loans: {
         totalLent,
         totalBorrowed,
-        lentCount: lentContacts.length,
-        borrowedCount: borrowedContacts.length,
+        lentCount,
+        borrowedCount,
       },
       goals,
       motivation: {
