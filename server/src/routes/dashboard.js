@@ -162,6 +162,10 @@ router.get('/summary', async (req, res, next) => {
   try {
     const userId = userObjectId(req);
     const now = new Date();
+    const scopeAll =
+      req.query.scope === 'all' ||
+      req.query.scope === 'overall' ||
+      req.query.range === 'all';
     const {
       month,
       year,
@@ -173,19 +177,22 @@ router.get('/summary', async (req, res, next) => {
       prevUseInclusiveEnd,
     } = resolvePeriod(req);
 
-    const currentDateMatch = useInclusiveEnd
+    const monthDateMatch = useInclusiveEnd
       ? { date: { $gte: start, $lte: end } }
       : { date: { $gte: start, $lt: end } };
     const previousDateMatch = prevUseInclusiveEnd
       ? { date: { $gte: prevStart, $lte: prevEnd } }
       : { date: { $gte: prevStart, $lt: prevEnd } };
-    const spanEnd = useInclusiveEnd ? end : end;
-    const spanMatch = {
-      date: {
-        $gte: prevStart,
-        ...(useInclusiveEnd ? { $lte: spanEnd } : { $lt: spanEnd }),
-      },
-    };
+    // Totals window: all-time, or this month (+ prev for vs-last-month).
+    const totalsMatch = scopeAll ? {} : monthDateMatch;
+    const spanMatch = scopeAll
+      ? {}
+      : {
+          date: {
+            $gte: prevStart,
+            ...(useInclusiveEnd ? { $lte: end } : { $lt: end }),
+          },
+        };
 
     const [txFacet, openContacts, goals, userDoc, recurringTemplates] =
       await Promise.all([
@@ -199,19 +206,21 @@ router.get('/summary', async (req, res, next) => {
         {
           $facet: {
             current: [
-              { $match: currentDateMatch },
+              ...(scopeAll ? [] : [{ $match: totalsMatch }]),
               { $project: { type: 1, category: 1, amount: 1 } },
             ],
-            previous: [
-              { $match: previousDateMatch },
-              { $project: { type: 1, category: 1, amount: 1 } },
-            ],
+            previous: scopeAll
+              ? [{ $match: { _id: { $exists: false } } }]
+              : [
+                  { $match: previousDateMatch },
+                  { $project: { type: 1, category: 1, amount: 1 } },
+                ],
             categoryBreakdown: [
               {
                 $match: {
                   type: 'expense',
                   category: { $ne: 'savings' },
-                  ...currentDateMatch,
+                  ...totalsMatch,
                 },
               },
               { $group: { _id: '$category', total: { $sum: '$amount' } } },
@@ -221,14 +230,14 @@ router.get('/summary', async (req, res, next) => {
               {
                 $match: {
                   type: 'income',
-                  ...currentDateMatch,
+                  ...totalsMatch,
                 },
               },
               { $group: { _id: '$category', total: { $sum: '$amount' } } },
               { $sort: { total: -1 } },
             ],
             recent: [
-              { $match: currentDateMatch },
+              ...(scopeAll ? [] : [{ $match: totalsMatch }]),
               { $sort: { date: -1 } },
               { $limit: 4 },
               {
@@ -242,19 +251,20 @@ router.get('/summary', async (req, res, next) => {
                 },
               },
             ],
+            // Suggestions always use the calendar month, even in overall scope.
             salaryThisMonth: [
               {
                 $match: {
                   type: 'income',
                   category: 'salary',
-                  ...currentDateMatch,
+                  ...monthDateMatch,
                 },
               },
               { $limit: 1 },
               { $project: { _id: 1 } },
             ],
             monthKeys: [
-              { $match: currentDateMatch },
+              { $match: monthDateMatch },
               {
                 $project: {
                   key: {
@@ -377,6 +387,7 @@ router.get('/summary', async (req, res, next) => {
     }
 
     res.json({
+      scope: scopeAll ? 'all' : 'month',
       month,
       year,
       income,
@@ -384,15 +395,25 @@ router.get('/summary', async (req, res, next) => {
       toSavings,
       saved,
       savingsRate,
-      vsLastMonth: {
-        income: income - previous.income,
-        expenses: expenses - previous.expenses,
-        toSavings: toSavings - previous.toSavings,
-        saved: saved - prevSaved,
-        incomePct: pctChange(income, previous.income),
-        expensesPct: pctChange(expenses, previous.expenses),
-        savedPct: pctChange(saved, prevSaved),
-      },
+      vsLastMonth: scopeAll
+        ? {
+            income: 0,
+            expenses: 0,
+            toSavings: 0,
+            saved: 0,
+            incomePct: 0,
+            expensesPct: 0,
+            savedPct: 0,
+          }
+        : {
+            income: income - previous.income,
+            expenses: expenses - previous.expenses,
+            toSavings: toSavings - previous.toSavings,
+            saved: saved - prevSaved,
+            incomePct: pctChange(income, previous.income),
+            expensesPct: pctChange(expenses, previous.expenses),
+            savedPct: pctChange(saved, prevSaved),
+          },
       categoryBreakdown,
       incomeCategoryBreakdown,
       recentTransactions,

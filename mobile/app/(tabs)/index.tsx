@@ -18,10 +18,18 @@ import { DonutChart } from '@/components/DonutChart';
 import { RingProgress } from '@/components/RingProgress';
 import { UserAvatar } from '@/components/UserAvatar';
 import { BrandLogo } from '@/components/BrandLogo';
+import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { getCategoryLabel } from '@/lib/category';
 import { Brand, Radius, Spacing, TxnKind, TxnKindSoft, TxnKindDeep, txnKindGradient, txnKindGradientDeep, categoryTint } from '@/constants/theme';
 import { resolveMoneyKind, moneyKindColor } from '@/lib/txnKind';
 import { currentMonthSummaryParams } from '@/lib/transactionPeriod';
+
+type HomeScope = 'all' | 'month';
+
+function summaryParams(lang: string, scope: HomeScope) {
+  if (scope === 'all') return { lang, scope: 'all' as const };
+  return { lang, ...currentMonthSummaryParams() };
+}
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -172,26 +180,27 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { bg, card, border, text, muted, well, chartEmpty, field } = usePageChrome();
+  const [scope, setScope] = useState<HomeScope>('all');
   const [summary, setSummary] = useState<DashboardSummary | null>(() =>
-    peekApiCache<DashboardSummary>('/dashboard/summary', {
-      lang: i18n.language,
-      ...currentMonthSummaryParams(),
-    })
+    peekApiCache<DashboardSummary>('/dashboard/summary', summaryParams(i18n.language, 'all'))
   );
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = async (fresh = false) => {
-    const { data } = await api.get('/dashboard/summary', {
-      params: { lang: i18n.language, ...currentMonthSummaryParams() },
-      headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
-    });
-    setSummary(data);
-  };
+  const load = useCallback(
+    async (fresh = false, nextScope: HomeScope = scope) => {
+      const { data } = await api.get('/dashboard/summary', {
+        params: summaryParams(i18n.language, nextScope),
+        headers: fresh ? { 'X-Bypass-Cache': '1' } : undefined,
+      });
+      setSummary(data);
+    },
+    [i18n.language, scope]
+  );
 
   useFocusEffect(
     useCallback(() => {
       load().catch(() => {});
-    }, [i18n.language])
+    }, [load])
   );
 
   const onRefresh = async () => {
@@ -203,11 +212,21 @@ export default function HomeScreen() {
     }
   };
 
+  const onScopeChange = (next: HomeScope) => {
+    setScope(next);
+    load(false, next).catch(() => {});
+  };
+
+  const isOverall = scope === 'all';
   const saved = summary?.saved ?? 0;
   const savedPct = summary?.vsLastMonth?.savedPct ?? 0;
   const incomePct = summary?.vsLastMonth?.incomePct ?? 0;
   const expensesPct = summary?.vsLastMonth?.expensesPct ?? 0;
   const initials = initialsFromName(displayName || user?.name || 'U');
+  const scopeTabs = [
+    { key: 'all' as const, label: t('dashboard.scopeOverall', { defaultValue: 'Overall' }) },
+    { key: 'month' as const, label: t('dashboard.scopeThisMonth', { defaultValue: 'This month' }) },
+  ];
 
   const spendSlices = useMemo(() => {
     const rows = summary?.categoryBreakdown || [];
@@ -280,25 +299,44 @@ export default function HomeScreen() {
         style={styles.hero}>
         <View style={styles.heroGlowA} />
         <View style={styles.heroGlowB} />
+        <View style={styles.scopeTabs}>
+          <SegmentedTabs
+            tabs={scopeTabs}
+            active={scope}
+            onChange={onScopeChange}
+            accentColor={TxnKindSoft.income}
+            trackColor="rgba(255,255,255,0.12)"
+          />
+        </View>
         <RTLRow style={styles.heroTop} gap={12}>
           <View style={styles.heroLeft}>
             <AppText variant="label" color="rgba(255,255,255,0.8)">
-              {t('dashboard.savedThisMonth')}
+              {isOverall
+                ? t('dashboard.totalSavedOverall', { defaultValue: 'Total Saved' })
+                : t('dashboard.savedThisMonth')}
             </AppText>
             <AppText variant="amountMd" color="#FFFFFF" numberOfLines={1} adjustsFontSizeToFit style={styles.heroAmount}>
               {formatPKR(saved)}
             </AppText>
-            <View style={[styles.deltaPill, savedPct < 0 && styles.deltaPillNeg]}>
-              <Ionicons
-                name={savedPct >= 0 ? 'trending-up' : 'trending-down'}
-                size={12}
-                color={savedPct >= 0 ? '#A7F3D0' : '#FECACA'}
-              />
-              <AppText variant="caption" color={savedPct >= 0 ? '#A7F3D0' : '#FECACA'}>
-                {savedPct >= 0 ? '+' : ''}
-                {savedPct}% {t('dashboard.vsLastMonth')}
-              </AppText>
-            </View>
+            {isOverall ? (
+              <View style={styles.deltaPill}>
+                <AppText variant="caption" color="#A7F3D0">
+                  {t('dashboard.allTime', { defaultValue: 'All time' })}
+                </AppText>
+              </View>
+            ) : (
+              <View style={[styles.deltaPill, savedPct < 0 && styles.deltaPillNeg]}>
+                <Ionicons
+                  name={savedPct >= 0 ? 'trending-up' : 'trending-down'}
+                  size={12}
+                  color={savedPct >= 0 ? '#A7F3D0' : '#FECACA'}
+                />
+                <AppText variant="caption" color={savedPct >= 0 ? '#A7F3D0' : '#FECACA'}>
+                  {savedPct >= 0 ? '+' : ''}
+                  {savedPct}% {t('dashboard.vsLastMonth')}
+                </AppText>
+              </View>
+            )}
             <RTLRow gap={6} style={styles.heroNote}>
               <Ionicons name="stats-chart" size={13} color="#A7F3D0" />
               <AppText variant="caption" color="rgba(255,255,255,0.8)" style={{ flex: 1 }} numberOfLines={2}>
@@ -472,14 +510,14 @@ export default function HomeScreen() {
         <MetricTile
           label={t('dashboard.income')}
           value={formatPKR(summary?.income ?? 0)}
-          meta={`${incomePct >= 0 ? '↑' : '↓'} ${Math.abs(incomePct)}%`}
+          meta={isOverall ? '—' : `${incomePct >= 0 ? '↑' : '↓'} ${Math.abs(incomePct)}%`}
           icon="arrow-up"
           colors={txnKindGradient('income')}
         />
         <MetricTile
           label={t('dashboard.expenses')}
           value={formatPKR(summary?.expenses ?? 0)}
-          meta={`${expensesPct >= 0 ? '↑' : '↓'} ${Math.abs(expensesPct)}%`}
+          meta={isOverall ? '—' : `${expensesPct >= 0 ? '↑' : '↓'} ${Math.abs(expensesPct)}%`}
           icon="arrow-down"
           colors={txnKindGradient('expense')}
         />
@@ -502,7 +540,9 @@ export default function HomeScreen() {
       {/* Monthly spending — full width: donut + legend */}
       <View style={[styles.panel, { backgroundColor: card, borderColor: border }]}>
         <AppText variant="bodySemibold" color={text} style={styles.panelTitle}>
-          {t('dashboard.monthlySpending')}
+          {isOverall
+            ? t('dashboard.spendingOverall', { defaultValue: 'Spending' })
+            : t('dashboard.monthlySpending')}
         </AppText>
         <RTLRow style={styles.spendBody} gap={14}>
           <DonutChart
@@ -673,6 +713,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(52,211,153,0.2)',
+  },
+  scopeTabs: {
+    marginBottom: 12,
   },
   heroGlowA: {
     position: 'absolute',
