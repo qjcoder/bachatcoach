@@ -22,28 +22,76 @@ function signedAmountExpr() {
   };
 }
 
-async function paymentBalances(userId) {
+async function paymentBalances(userId, accounts) {
   const userOid = new mongoose.Types.ObjectId(userId);
-  const [cashRow, bankRows] = await Promise.all([
-    Transaction.aggregate([
-      { $match: { user: userOid, paymentMethod: 'cash' } },
-      { $group: { _id: null, balance: { $sum: signedAmountExpr() } } },
-    ]),
+  const accountIds = accounts.map((a) => a._id);
+  const nameToId = new Map(
+    accounts.map((a) => [String(a.name || '').trim().toLowerCase(), String(a._id)])
+  );
+
+  const [cashRow, byIdRows, byNameRows] = await Promise.all([
+    // Cash wallet: explicit cash, or no bank link
     Transaction.aggregate([
       {
         $match: {
           user: userOid,
-          paymentMethod: 'bank',
-          bankAccount: { $ne: null },
+          $and: [
+            {
+              $or: [{ paymentMethod: 'cash' }, { paymentMethod: { $exists: false } }, { paymentMethod: null }],
+            },
+            {
+              $or: [{ bankAccount: null }, { bankAccount: { $exists: false } }],
+            },
+          ],
         },
       },
-      { $group: { _id: '$bankAccount', balance: { $sum: signedAmountExpr() } } },
+      { $group: { _id: null, balance: { $sum: signedAmountExpr() } } },
+    ]),
+    // Linked bank account id (income/expense/savings into that account)
+    accountIds.length
+      ? Transaction.aggregate([
+          {
+            $match: {
+              user: userOid,
+              bankAccount: { $in: accountIds },
+            },
+          },
+          { $group: { _id: '$bankAccount', balance: { $sum: signedAmountExpr() } } },
+        ])
+      : Promise.resolve([]),
+    // Legacy rows: bank payment with name snapshot but missing live ref
+    Transaction.aggregate([
+      {
+        $match: {
+          user: userOid,
+          paymentMethod: { $in: ['bank', 'jazzcash', 'easypaisa', 'card'] },
+          $or: [{ bankAccount: null }, { bankAccount: { $exists: false } }],
+          bankAccountName: { $type: 'string', $ne: '' },
+        },
+      },
+      {
+        $group: {
+          _id: { $toLower: { $trim: { input: '$bankAccountName' } } },
+          balance: { $sum: signedAmountExpr() },
+        },
+      },
     ]),
   ]);
 
-  const byAccount = new Map(
-    bankRows.map((row) => [String(row._id), Number(row.balance) || 0])
-  );
+  const byAccount = new Map(accountIds.map((id) => [String(id), 0]));
+
+  for (const row of byIdRows) {
+    const key = String(row._id);
+    byAccount.set(key, (byAccount.get(key) || 0) + (Number(row.balance) || 0));
+  }
+
+  for (const row of byNameRows) {
+    const id = nameToId.get(String(row._id || '').trim().toLowerCase());
+    if (!id) continue;
+    // Skip if already counted via live bankAccount id for same name — name rows have null id only
+    byAccount.set(id, (byAccount.get(id) || 0) + (Number(row.balance) || 0));
+  }
+
   return {
     cashBalance: Number(cashRow[0]?.balance) || 0,
     byAccount,
@@ -52,10 +100,8 @@ async function paymentBalances(userId) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const [accounts, balances] = await Promise.all([
-      BankAccount.find({ user: req.userId }).sort({ name: 1 }).lean(),
-      paymentBalances(req.userId),
-    ]);
+    const accounts = await BankAccount.find({ user: req.userId }).sort({ name: 1 }).lean();
+    const balances = await paymentBalances(req.userId, accounts);
 
     res.json({
       cashBalance: balances.cashBalance,

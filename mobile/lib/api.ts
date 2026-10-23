@@ -1,7 +1,12 @@
 import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { currentMonthSummaryParams, deviceTimeZone } from '@/lib/transactionPeriod';
+import {
+  currentMonthSummaryParams,
+  deviceTimeZone,
+  getTransactionPeriodRange,
+  periodFetchLimit,
+} from '@/lib/transactionPeriod';
 
 function getApiUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
@@ -12,8 +17,8 @@ function getApiUrl(): string {
 }
 
 /** Fresh: serve without network. Stale: serve instantly + revalidate in background. */
-const FRESH_TTL_MS = 120_000;
-const STALE_TTL_MS = 15 * 60_000;
+const FRESH_TTL_MS = 180_000;
+const STALE_TTL_MS = 20 * 60_000;
 
 type CacheEntry = {
   freshUntil: number;
@@ -21,11 +26,15 @@ type CacheEntry = {
   data: unknown;
 };
 
+type CacheListener = (key: string, data: unknown) => void;
+
 const getCache = new Map<string, CacheEntry>();
 const revalidating = new Set<string>();
+const cacheListeners = new Set<CacheListener>();
 
 /** In-memory JWT — avoids SecureStore round-trip on every request. */
 let memoryToken: string | null = null;
+let prefetchInFlight: Promise<void> | null = null;
 
 export function setAuthToken(token: string | null) {
   memoryToken = token;
@@ -64,15 +73,27 @@ function shouldServeFromCache(config: AxiosRequestConfig) {
   return true;
 }
 
+function notifyCache(key: string, data: unknown) {
+  for (const listener of cacheListeners) {
+    try {
+      listener(key, data);
+    } catch {
+      /* ignore subscriber errors */
+    }
+  }
+}
+
 function putCache(config: AxiosRequestConfig, data: unknown) {
   if ((config.method || 'get').toLowerCase() !== 'get') return;
   if (isBackupExport(config.url)) return;
   const now = Date.now();
-  getCache.set(cacheKey(config), {
+  const key = cacheKey(config);
+  getCache.set(key, {
     data,
     freshUntil: now + FRESH_TTL_MS,
     staleUntil: now + STALE_TTL_MS,
   });
+  notifyCache(key, data);
 }
 
 function pathFromUrl(url?: string) {
@@ -91,7 +112,8 @@ function invalidateForMutation(url?: string) {
   const prefixes: string[] = [];
 
   if (path.includes('/transactions') || path.includes('/dashboard')) {
-    prefixes.push('/transactions', '/dashboard');
+    // Txns change cash/bank available amounts shown on Add Income/Expense.
+    prefixes.push('/transactions', '/dashboard', '/bank-accounts', '/bankAccounts');
   }
   if (path.includes('/contacts')) {
     prefixes.push('/contacts', '/dashboard');
@@ -117,6 +139,7 @@ function invalidateForMutation(url?: string) {
 
 export function clearApiCache() {
   getCache.clear();
+  prefetchInFlight = null;
 }
 
 export function peekApiCache<T = unknown>(url: string, params?: Record<string, unknown>): T | null {
@@ -124,6 +147,25 @@ export function peekApiCache<T = unknown>(url: string, params?: Record<string, u
   const hit = getCache.get(key);
   if (!hit || hit.staleUntil <= Date.now()) return null;
   return hit.data as T;
+}
+
+/** Push cache updates into React when background SWR revalidate finishes. */
+export function subscribeApiCache(listener: CacheListener) {
+  cacheListeners.add(listener);
+  return () => {
+    cacheListeners.delete(listener);
+  };
+}
+
+export function subscribeApiCacheKey(
+  url: string,
+  params: Record<string, unknown> | undefined,
+  onData: (data: unknown) => void
+) {
+  const key = cacheKey({ method: 'get', url, params });
+  return subscribeApiCache((changedKey, data) => {
+    if (changedKey === key) onData(data);
+  });
 }
 
 export const api = axios.create({
@@ -206,18 +248,36 @@ api.interceptors.response.use(
 
 /** Warm critical GETs after login / when tabs mount so navigation feels instant. */
 export async function prefetchCriticalData(lang = 'en') {
-  const summaryParams = currentMonthSummaryParams();
-  const year = summaryParams.year;
-  const tz = deviceTimeZone();
+  if (prefetchInFlight) return prefetchInFlight;
 
-  await Promise.allSettled([
-    api.get('/dashboard/summary', { params: { lang, ...summaryParams } }),
-    api.get('/transactions', {
-      params: { from: summaryParams.from, to: summaryParams.to, limit: 500 },
-    }),
-    api.get('/contacts', { params: { includeSettled: 1 } }),
-    api.get('/dashboard/monthly-report', { params: { year, tz } }),
-  ]);
+  prefetchInFlight = (async () => {
+    const summaryParams = currentMonthSummaryParams();
+    const year = summaryParams.year;
+    const tz = deviceTimeZone();
+    const allRange = getTransactionPeriodRange('all');
+
+    // First paint: home + month + loans (small payloads)
+    await Promise.allSettled([
+      api.get('/dashboard/summary', { params: { lang, scope: 'all' } }),
+      api.get('/dashboard/summary', { params: { lang, ...summaryParams } }),
+      api.get('/transactions', {
+        params: { from: summaryParams.from, to: summaryParams.to, limit: periodFetchLimit('month') },
+      }),
+      api.get('/contacts', { params: { includeSettled: 1 } }),
+      api.get('/dashboard/monthly-report', { params: { year, tz } }),
+    ]);
+
+    // Cashflow "All" period — warm in background after critical GETs
+    void api
+      .get('/transactions', {
+        params: { from: allRange.from, to: allRange.to, limit: periodFetchLimit('all') },
+      })
+      .catch(() => undefined);
+  })().finally(() => {
+    prefetchInFlight = null;
+  });
+
+  return prefetchInFlight;
 }
 
 export default api;

@@ -389,42 +389,44 @@ export default function AddTransactionScreen() {
     }
   }, [paramType]);
 
+  const refreshMoneySources = useCallback(async (fresh = false) => {
+    const headers = fresh ? { 'X-Bypass-Cache': '1' } : undefined;
+    const summaryParams = { lang: i18n.language, ...currentMonthSummaryParams() };
+    const [summaryRes, banksRes] = await Promise.all([
+      api.get('/dashboard/summary', { params: summaryParams, headers }),
+      api.get('/bank-accounts', { headers }),
+    ]);
+    const summary = summaryRes.data || {};
+    setMonthIncome(Number(summary.income) || 0);
+    const rows: Array<{ _id: string; total: number }> = isIncome
+      ? summary.incomeCategoryBreakdown || []
+      : summary.categoryBreakdown || [];
+    const map: Record<string, number> = {};
+    for (const row of rows) {
+      const key = row._id === 'personal' ? 'other' : row._id;
+      map[key] = (map[key] || 0) + (Number(row.total) || 0);
+    }
+    setCategorySpend(map);
+    const parsed = parseBankAccountsPayload(banksRes.data);
+    setBankAccounts(parsed.accounts);
+    setCashBalance(parsed.cashBalance);
+  }, [i18n.language, isIncome]);
+
   useEffect(() => {
     let cancelled = false;
-    const summaryParams = { lang: i18n.language, ...currentMonthSummaryParams() };
-    Promise.all([
-      api.get('/dashboard/summary', { params: summaryParams }),
-      api.get('/bank-accounts'),
-    ])
-      .then(([summaryRes, banksRes]) => {
-        if (cancelled) return;
-        const summary = summaryRes.data || {};
-        setMonthIncome(Number(summary.income) || 0);
-        const rows: Array<{ _id: string; total: number }> = isIncome
-          ? summary.incomeCategoryBreakdown || []
-          : summary.categoryBreakdown || [];
-        const map: Record<string, number> = {};
-        for (const row of rows) {
-          const key = row._id === 'personal' ? 'other' : row._id;
-          map[key] = (map[key] || 0) + (Number(row.total) || 0);
-        }
-        setCategorySpend(map);
-        const parsed = parseBankAccountsPayload(banksRes.data);
-        setBankAccounts(parsed.accounts);
-        setCashBalance(parsed.cashBalance);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        if (isSavings) setMonthIncome(0);
-        setCategorySpend({});
-        setBankAccounts([]);
-        setCashBalance(0);
-      });
+    refreshMoneySources(true).catch(() => {
+      if (cancelled) return;
+      if (isSavings) setMonthIncome(0);
+      setCategorySpend({});
+      setBankAccounts([]);
+      setCashBalance(0);
+    });
     return () => {
       cancelled = true;
     };
-  }, [isSavings, isIncome, i18n.language]);
+  }, [isSavings, refreshMoneySources]);
 
+  // Keep selected bank when switching to Bank; only clear when leaving Bank.
   useEffect(() => {
     if (paymentMethod !== 'bank') {
       setBankAccountId('');
